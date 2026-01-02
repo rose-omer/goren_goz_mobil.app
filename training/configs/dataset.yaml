@@ -1,0 +1,26 @@
+# Türkiye Özel Dataset Konfigürasyonu
+# YOLOv11 Fine-tuning için
+
+path: ../datasets/goren_goz_turkish
+train: images/train
+val: images/val
+
+# Sınıf tanımları (12 sınıf)
+names:
+  # Öncelik 1 - Kritik (Güvenlik)
+  0: person           # Kişi - yaya, çocuk, yaşlı
+  1: vehicle          # Araç - araba, otobüs, kamyon
+  2: bicycle          # Bisiklet, scooter
+  3: motorcycle       # Motosiklet
+  
+  # Öncelik 2 - Engeller
+  4: pole             # Direk - elektrik, aydınlatma
+  5: stairs           # Merdiven
+  6: pothole          # Çukur - kaldırım çukuru
+  7: obstacle         # Genel engeller
+  
+  # Öncelik 3 - Türkiye Özel
+  8: traffic_sign_tr  # Türk trafik işaretleri
+  9: crosswalk        # Yaya geçidi
+  10: curb            # Bordür - kaldırım kenarı
+  11: construction    # İnşaat, şantiye

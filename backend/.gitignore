@@ -1,0 +1,40 @@
+# Backend Python cache and logs
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+
+# Model cache (PyTorch Hub)
+.cache/
+torch/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Temporary files
+*.tmp
+temp/

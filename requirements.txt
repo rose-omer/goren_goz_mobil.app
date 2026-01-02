@@ -1,0 +1,40 @@
+﻿# Gören Göz Laptop - Derinlik Algılama Sistemi
+# Python 3.12 uyumlu versiyonlar
+
+# Temel paketler (Python 3.12 uyumlu)
+numpy>=1.26.0
+opencv-python>=4.9.0.80
+Pillow>=10.1.0
+
+# Deep Learning - PyTorch (Python 3.12 için)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.0
+torchvision>=0.16.0
+timm>=0.9.12
+ultralytics>=8.0.0
+openvino>=2023.2.0
+
+# FastAPI + Backend
+fastapi>=0.104.0
+uvicorn>=0.24.0
+httpx>=0.25.0
+python-multipart>=0.0.6
+slowapi>=0.1.9
+
+# Konfigürasyon ve Utility
+PyYAML>=6.0.1
+python-dotenv>=1.0.0
+
+# Sesli uyarı (Text-to-Speech)
+pyttsx3>=2.90
+
+# Logging ve Monitoring
+coloredlogs>=15.0.1
+
+# Test için
+pytest>=7.4.3
+pytest-cov>=4.1.0
+
+# MiDaS modeli için gerekli
+matplotlib>=3.8.0
+scipy>=1.11.4

@@ -1,0 +1,92 @@
+# Gören Göz Laptop - Ana Konfigürasyon Dosyası
+
+# Kamera Ayarları
+camera:
+  device_id: 0              # Varsayılan laptop kamerası
+  width: 640                # Frame genişliği
+  height: 480               # Frame yüksekliği
+  fps: 30                   # Hedef FPS
+  auto_exposure: true       # Otomatik pozlama
+  brightness: 0.5           # Parlaklık (0.0 - 1.0)
+
+# MiDaS Model Ayarları
+depth_model:
+  # Model selection - Feature Flag
+  use_depth_anything_v2: false  # ✅ MiDaS kullan (Depth Anything V2 devre dışı)
+  
+  # MiDaS settings (default)
+  model_type: "MiDaS_small" # Seçenekler: DPT_Large, DPT_Hybrid, MiDaS_small
+  device: "cpu"             # auto, cuda, cpu
+  use_openvino: true        # ✅ ENABLED for testing
+  openvino_device: "AUTO"   # GPU, CPU, AUTO
+  optimize: true            # Model optimizasyonu
+  half_precision: false     # FP16 kullan (GPU için)
+  min_depth: 0.5            # Minimum algılama mesafesi (metre)
+  max_depth: 5.0            # Maksimum algılama mesafesi (metre)
+
+# Görselleştirme Ayarları
+visualization:
+  colormap: "jet"           # jet, viridis, plasma, inferno, magma, turbo
+  show_fps: true            # FPS gösterimi
+  show_info: true           # Bilgi overlay
+  window_name: "Gören Göz - Derinlik Haritası"
+  fullscreen: false         # Tam ekran başlatma
+
+# Uyarı Sistemi
+alerts:
+  enabled: true             # Uyarı sistemi aktif
+  min_distance: 1.0         # Minimum mesafe (metre)
+  warning_distance: 2.0     # Uyarı mesafesi (metre)
+  warning_area_threshold: 0.15  # Uyarı için minimum alan (15%)
+  sound_enabled: true       # Sesli uyarı (AÇIK)
+  visual_warnings: true     # Görsel uyarı
+  alert_color: [0, 0, 255]  # BGR: Kırmızı
+  sound:
+    beep_frequency: 1000    # DANGER: 1000 Hz
+    beep_duration: 200      # 200 ms
+    near_frequency: 750     # NEAR: 750 Hz (daha düşük ton)
+    near_duration: 150      # 150 ms (daha kısa)
+  alert_check_fps: 5        # Saniyede 5 kez kontrol (10'dan düşürüldü)
+
+# Performance Ayarları
+performance:
+  max_fps: 30               # Maksimum FPS sınırı
+  skip_frames: 2            # Her n frame'i atla (0 = atla yok)
+  resize_before_process: true
+  target_size: [384, 384]   # MiDaS için optimal boyut
+  low_res_preview: false    # Düşük çözünürlük önizleme (2x hızlı)
+  cache_colormaps: true     # Colormap cache (hafıza kullanır)
+
+# Logging Ayarları
+logging:
+  level: "INFO"             # DEBUG, INFO, WARNING, ERROR
+  file: "logs/system.log"
+  console: true             # Konsola da yazma
+  max_size_mb: 10           # Maksimum log dosyası boyutu
+  backup_count: 3           # Kaç eski log saklansın
+
+# Kayıt Ayarları
+recording:
+  enabled: false            # Video kaydetme
+  output_dir: "data/sample_outputs"
+  format: "mp4"
+  codec: "mp4v"
+# VLM (Vision Language Model) - llama.cpp + SmolVLM-500M
+vlm:
+  enabled: true             # VLM özelliğini etkinleştir
+  server_url: "http://localhost:8080"   # llama-server URL
+  timeout: 60               # Request timeout (saniye)
+  max_retries: 2            # Retry denemesi sayısı
+  
+  # Model ayarları (llama.cpp)
+  model_name: "smolvlm-500m"  # SmolVLM-500M model
+  
+  # Inference parametreleri
+  n_predict: 100            # Maksimum token sayısı
+  temperature: 0.7          # Yaratıcılık (0.0-1.0)
+  top_p: 0.9                # Nucleus sampling
+  top_k: 40                 # Top-k sampling
+  
+  # Image processing
+  max_image_size: 512       # Maksimum resim boyutu (hız için)
+  compress_quality: 85      # JPEG sıkıştırma kalitesi

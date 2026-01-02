@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gören Göz - VLM Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #2196F3;
+            padding-bottom: 20px;
+        }
+        
+        h1 {
+            color: #2196F3;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            background: #4CAF50;
+            color: white;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        
+        .status.error {
+            background: #f44336;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #1976D2;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        .history-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+            gap: 20px;
+        }
+        
+        .request-card {
+            background: #2a2a2a;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            overflow: hidden;
+            transition: all 0.3s;
+            animation: slideIn 0.5s ease-in;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .request-card:hover {
+            border-color: #2196F3;
+            box-shadow: 0 0 15px rgba(33, 150, 243, 0.3);
+        }
+        
+        .request-card.new {
+            border-color: #4CAF50;
+            background: #1b2a1b;
+        }
+        
+        .timestamp {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        
+        .question {
+            font-size: 14px;
+            color: #64B5F6;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .image-container {
+            width: 100%;
+            height: 150px;
+            background: #1a1a1a;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .image-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .no-image {
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .answer {
+            background: #1a1a1a;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        
+        .answer-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        
+        .metadata {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #444;
+        }
+        
+        .metadata-item {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .metadata-label {
+            color: #888;
+            font-weight: bold;
+        }
+        
+        .metadata-value {
+            color: #64B5F6;
+        }
+        
+        .source {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        
+        .source.vlm {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .source.fallback {
+            background: #FF9800;
+            color: white;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #444;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            color: #2196F3;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        
+        .refresh-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #2196F3;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👁️ Gören Göz - VLM Monitor</h1>
+            <p>Real-time Vision Language Model Response Monitoring</p>
+            <div class="status" id="status">Connecting...</div>
+        </header>
+        
+        <div class="controls">
+            <button onclick="refreshHistory()">🔄 Refresh Now</button>
+            <button onclick="clearHistory()">🗑️ Clear History</button>
+            <button onclick="toggleAutoRefresh()">⏸️ Auto-refresh: ON</button>
+        </div>
+        
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-requests">0</div>
+                <div class="stat-label">Total Requests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-time">0ms</div>
+                <div class="stat-label">Avg Response Time</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="vlm-count">0</div>
+                <div class="stat-label">VLM Responses</div>
+            </div>
+        </div>
+        
+        <div id="history-container" class="history-container">
+            <div class="empty-state">
+                <h3>No requests yet...</h3>
+                <p>Waiting for VLM requests from the mobile app</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="refresh-indicator" id="refresh-indicator">2s</div>
+    
+    <script>
+        let autoRefresh = true;
+        let refreshInterval = 2000; // 2 seconds
+        let lastRequestCount = 0;
+        
+        async function refreshHistory() {
+            try {
+                const response = await fetch('/api/ask_context_history');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('status').textContent = '✓ Connected';
+                    document.getElementById('status').classList.remove('error');
+                    renderHistory(data.history);
+                    updateStats(data.history);
+                    
+                    // Highlight new requests
+                    if (data.count > lastRequestCount) {
+                        const cards = document.querySelectorAll('.request-card');
+                        for (let i = 0; i < data.count - lastRequestCount; i++) {
+                            if (cards[i]) {
+                                cards[i].classList.add('new');
+                                setTimeout(() => cards[i].classList.remove('new'), 3000);
+                            }
+                        }
+                    }
+                    lastRequestCount = data.count;
+                } else {
+                    showError('Invalid response from server');
+                }
+            } catch (error) {
+                showError('Failed to fetch history: ' + error.message);
+                console.error('Error:', error);
+            }
+        }
+        
+        function renderHistory(history) {
+            const container = document.getElementById('history-container');
+            
+            if (history.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No requests yet...</h3>
+                        <p>Waiting for VLM requests from the mobile app</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Reverse to show newest first
+            container.innerHTML = history.reverse().map((item, idx) => `
+                <div class="request-card">
+                    <div class="timestamp">
+                        ${new Date(item.timestamp).toLocaleString()}
+                    </div>
+                    
+                    <div class="question">
+                        Q: ${escapeHtml(item.question)}
+                    </div>
+                    
+                    <div class="image-container">
+                        ${item.image_base64 ? `<img src="data:image/jpeg;base64,${item.image_base64}" alt="Request image" loading="lazy">` : '<div class="no-image">No image available</div>'}
+                    </div>
+                    
+                    <div class="answer">
+                        <div class="answer-label">Answer:</div>
+                        <div>${escapeHtml(item.answer)}
+                            ${item.metadata && item.metadata.source ? `<span class="source ${item.metadata.source}">${item.metadata.source.toUpperCase()}</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="metadata">
+                        <div class="metadata-item">
+                            <span class="metadata-label">Response Time:</span>
+                            <span class="metadata-value">${item.processing_time_ms.toFixed(0)}ms</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Detections:</span>
+                            <span class="metadata-value">${item.metadata?.detections_count || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function updateStats(history) {
+            if (history.length === 0) return;
+            
+            const totalRequests = history.length;
+            const avgTime = (history.reduce((sum, h) => sum + h.processing_time_ms, 0) / totalRequests).toFixed(0);
+            const vlmCount = history.filter(h => h.metadata?.source === 'vlm').length;
+            
+            document.getElementById('total-requests').textContent = totalRequests;
+            document.getElementById('avg-time').textContent = avgTime + 'ms';
+            document.getElementById('vlm-count').textContent = vlmCount;
+        }
+        
+        function showError(message) {
+            const status = document.getElementById('status');
+            status.textContent = '✗ ' + message;
+            status.classList.add('error');
+        }
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        function toggleAutoRefresh() {
+            autoRefresh = !autoRefresh;
+            const btn = event.target;
+            btn.textContent = autoRefresh ? '⏸️ Auto-refresh: ON' : '▶️ Auto-refresh: OFF';
+            if (autoRefresh) {
+                startAutoRefresh();
+            }
+        }
+        
+        function clearHistory() {
+            if (confirm('Clear history? This cannot be undone.')) {
+                lastRequestCount = 0;
+                document.getElementById('history-container').innerHTML = `
+                    <div class="empty-state">
+                        <h3>History cleared</h3>
+                        <p>Waiting for new VLM requests...</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function updateRefreshIndicator() {
+            const indicator = document.getElementById('refresh-indicator');
+            const now = new Date();
+            const secs = Math.ceil((refreshInterval - (now.getMilliseconds())) / 1000);
+            indicator.textContent = Math.max(1, secs) + 's';
+        }
+        
+        function startAutoRefresh() {
+            if (autoRefresh) {
+                setInterval(() => {
+                    if (autoRefresh) {
+                        refreshHistory();
+                        updateRefreshIndicator();
+                    }
+                }, refreshInterval);
+                updateRefreshIndicator();
+            }
+        }
+        
+        // Initial load
+        refreshHistory();
+        startAutoRefresh();
+    </script>
+</body>
+</html>

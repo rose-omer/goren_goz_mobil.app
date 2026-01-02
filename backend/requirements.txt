@@ -1,0 +1,55 @@
+# Gören Göz Mobil Backend - Requirements
+# =======================================
+# Python 3.10+ compatible
+
+# FastAPI Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Pydantic for validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Rate limiting
+slowapi>=0.1.9
+
+# Deep Learning - PyTorch (CPU version for compatibility)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.0
+torchvision>=0.16.0
+timm>=0.9.12
+
+# Object Detection - YOLO
+ultralytics>=8.0.0
+
+# Image processing
+opencv-python>=4.9.0.80
+Pillow>=10.1.0
+numpy>=1.26.0
+
+# Configuration
+PyYAML>=6.0.1
+python-dotenv>=1.0.0
+
+# Monitoring and logging
+coloredlogs>=15.0.1
+
+# Production server (optional)
+gunicorn>=21.2.0
+
+# Testing (optional)
+pytest>=7.4.3
+httpx>=0.26.0
+
+# For depth estimation
+scipy>=1.11.4
+matplotlib>=3.8.0
+
+# OpenVINO - Intel GPU/CPU Optimization
+openvino>=2023.3.0
+openvino-dev>=2023.3.0
+
+# VLM Service - llama.cpp communication
+requests>=2.31.0
+aiohttp>=3.9.0

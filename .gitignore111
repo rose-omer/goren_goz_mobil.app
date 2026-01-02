@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.iml
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins*
+build/
+*.iml
+
+# Logs
+logs/*.log
+*.log
+
+# Data & Models
+data/models/*.pth
+data/sample_outputs/*.mp4
+data/sample_outputs/*.avi
+data/sample_outputs/*.png
+
+# Model files (large files - download separately)
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+
+# Archive (legacy code)
+_archive/
+

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yalnız debug: yerel ağdaki geliştirme sunucusuna (ör. http://192.168.1.20:8110) düz HTTP.
+     Android IP aralığı joker karakteri desteklemez; uygulama adresi ayrıca yerel ağ IP'siyle sınırlar. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

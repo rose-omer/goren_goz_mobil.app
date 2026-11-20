@@ -1,93 +1,103 @@
-"""
-Pytest configuration and fixtures for backend tests.
-"""
+"""Ortak fikstürler. Hiçbir test model indirmez ya da gerçek VLM'e bağlanmaz."""
 
-import pytest
+from __future__ import annotations
+
+import io
+
+import httpx
 import numpy as np
-import tempfile
-from pathlib import Path
-from unittest.mock import Mock, MagicMock
+import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
 
-# Configure test environment
-@pytest.fixture(scope="session")
-def test_data_dir():
-    """Create temporary test data directory."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+from core.config import Settings
+from main import create_app
+from services.container import Services, session_factory
+from services.detection import Detection
+from services.tracking import SessionStore
+from services.vlm_service import VlmService
 
-
-@pytest.fixture
-def sample_image():
-    """Create a sample image array for testing."""
-    # Create a simple RGB image (480x640x3)
-    return np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+API_KEY = "test-anahtari"
 
 
-@pytest.fixture
-def sample_depth_map():
-    """Create a sample depth map for testing."""
-    # Create a depth map with values between 0.5 and 5.0 meters
-    depth = np.random.uniform(0.5, 5.0, (480, 640)).astype(np.float32)
-    return depth
+class FakeDepth:
+    name = "fake"
+
+    def estimate(self, bgr: np.ndarray) -> np.ndarray:
+        h, w = bgr.shape[:2]
+        # Kare aşağı indikçe yakınlaşır (büyük ters derinlik = yakın).
+        return np.tile(np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None], (1, w))
 
 
-@pytest.fixture
-def sample_detection():
-    """Create a sample object detection result."""
-    return {
-        'name': 'person',
-        'name_tr': 'insan',
-        'confidence': 0.95,
-        'bbox': [100, 50, 300, 400],
-        'center': [200, 225],
-        'distance': 1.5,
-        'priority': 10,
-        'region': 'center'
+class FakeDetector:
+    name = "fake"
+
+    def __init__(self, detections: list[Detection] | None = None) -> None:
+        self.detections = detections or []
+
+    def detect(self, bgr: np.ndarray) -> list[Detection]:
+        return list(self.detections)
+
+
+def vlm_ok(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/health":
+        return httpx.Response(200, json={"status": "ok"})
+    return httpx.Response(
+        200, json={"choices": [{"message": {"role": "assistant", "content": " Önünüzde bir kapı var. "}}]}
+    )
+
+
+def make_services(settings: Settings, detector, handler=vlm_ok) -> Services:
+    client = httpx.AsyncClient(base_url="http://vlm.test", transport=httpx.MockTransport(handler))
+    return Services(
+        settings=settings,
+        depth=FakeDepth(),
+        detector=detector,
+        vlm=VlmService(settings, client=client),
+        sessions=SessionStore(session_factory(settings), settings.session_ttl_s, settings.max_sessions),
+    )
+
+
+def make_settings(**overrides) -> Settings:
+    values = {
+        "api_key": API_KEY,
+        "debug": False,
+        "rate_limit_per_minute": 0,
+        "max_upload_bytes": 200_000,
+        "max_image_pixels": 1_000_000,
     }
+    values.update(overrides)
+    return Settings(_env_file=None, **values)
 
 
 @pytest.fixture
-def mock_depth_service():
-    """Create a mock depth service."""
-    service = MagicMock()
-    service.is_loaded = True
-    service.estimate = MagicMock(return_value=np.random.uniform(0.5, 5.0, (480, 640)).astype(np.float32))
-    return service
+def settings() -> Settings:
+    return make_settings()
 
 
 @pytest.fixture
-def mock_alert_service():
-    """Create a mock alert service."""
-    service = MagicMock()
-    service.analyze_depth = MagicMock(return_value={
-        'alert_level': 'SAFE',
-        'distance_stats': {'min': 0.5, 'max': 5.0, 'avg': 2.0},
-        'warnings': [],
-        'area_percentages': {},
-        'regional_alerts': {
-            'left': {'alert_level': 'SAFE', 'min_distance': 0.5, 'has_obstacle': False, 'message': 'Safe'},
-            'center': {'alert_level': 'SAFE', 'min_distance': 0.5, 'has_obstacle': False, 'message': 'Safe'},
-            'right': {'alert_level': 'SAFE', 'min_distance': 0.5, 'has_obstacle': False, 'message': 'Safe'}
-        }
-    })
-    return service
+def detector() -> FakeDetector:
+    return FakeDetector([Detection("person", 0.9, (280.0, 100.0, 360.0, 400.0), "center")])
 
 
 @pytest.fixture
-def mock_object_detection_service():
-    """Create a mock object detection service."""
-    service = MagicMock()
-    service.is_loaded = True
-    service.detect = MagicMock(return_value=[
-        {
-            'name': 'person',
-            'name_tr': 'insan',
-            'confidence': 0.95,
-            'bbox': [100, 50, 300, 400],
-            'center': [200, 225],
-            'distance': 1.5,
-            'priority': 10,
-            'region': 'center'
-        }
-    ])
-    return service
+def client(settings: Settings, detector: FakeDetector):
+    app = create_app(settings, service_factory=lambda s: make_services(s, detector))
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def auth() -> dict[str, str]:
+    return {"X-API-Key": API_KEY, "X-Session-Id": "test-oturum"}
+
+
+def jpeg_bytes(width: int = 640, height: int = 480) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (width, height), (120, 120, 120)).save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+@pytest.fixture
+def jpeg() -> bytes:
+    return jpeg_bytes()

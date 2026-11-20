@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release: yalnız HTTPS (plan G8). Debug sürümü src/debug altındaki dosyayla yerel ağ HTTP'sine izin verir. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

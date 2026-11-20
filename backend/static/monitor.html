@@ -1,470 +1,266 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gören Göz - VLM Monitor</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a1a;
-            color: #e0e0e0;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 3px solid #2196F3;
-            padding-bottom: 20px;
-        }
-        
-        h1 {
-            color: #2196F3;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        .status {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            background: #4CAF50;
-            color: white;
-            margin-top: 10px;
-            font-weight: bold;
-        }
-        
-        .status.error {
-            background: #f44336;
-        }
-        
-        .controls {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-        }
-        
-        button {
-            padding: 10px 20px;
-            background: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            transition: background 0.3s;
-        }
-        
-        button:hover {
-            background: #1976D2;
-        }
-        
-        button:active {
-            transform: scale(0.98);
-        }
-        
-        .history-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
-            gap: 20px;
-        }
-        
-        .request-card {
-            background: #2a2a2a;
-            border: 2px solid #444;
-            border-radius: 8px;
-            padding: 20px;
-            overflow: hidden;
-            transition: all 0.3s;
-            animation: slideIn 0.5s ease-in;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .request-card:hover {
-            border-color: #2196F3;
-            box-shadow: 0 0 15px rgba(33, 150, 243, 0.3);
-        }
-        
-        .request-card.new {
-            border-color: #4CAF50;
-            background: #1b2a1b;
-        }
-        
-        .timestamp {
-            font-size: 12px;
-            color: #888;
-            margin-bottom: 10px;
-        }
-        
-        .question {
-            font-size: 14px;
-            color: #64B5F6;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        
-        .image-container {
-            width: 100%;
-            height: 150px;
-            background: #1a1a1a;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .image-container img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-        }
-        
-        .no-image {
-            color: #666;
-            font-size: 12px;
-        }
-        
-        .answer {
-            background: #1a1a1a;
-            padding: 15px;
-            border-left: 4px solid #4CAF50;
-            border-radius: 3px;
-            margin-bottom: 10px;
-            font-size: 15px;
-            line-height: 1.5;
-        }
-        
-        .answer-label {
-            font-size: 12px;
-            color: #999;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-        
-        .metadata {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            font-size: 12px;
-            color: #aaa;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #444;
-        }
-        
-        .metadata-item {
-            display: flex;
-            justify-content: space-between;
-        }
-        
-        .metadata-label {
-            color: #888;
-            font-weight: bold;
-        }
-        
-        .metadata-value {
-            color: #64B5F6;
-        }
-        
-        .source {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: bold;
-            margin-left: 5px;
-        }
-        
-        .source.vlm {
-            background: #4CAF50;
-            color: white;
-        }
-        
-        .source.fallback {
-            background: #FF9800;
-            color: white;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-        
-        .empty-state svg {
-            width: 100px;
-            height: 100px;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .stat-card {
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            border: 2px solid #444;
-        }
-        
-        .stat-value {
-            font-size: 28px;
-            color: #2196F3;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 12px;
-            color: #888;
-            text-transform: uppercase;
-        }
-        
-        .refresh-indicator {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #2196F3;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 12px;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gören Göz sunucu izleme</title>
+<style>
+  :root {
+    color-scheme: dark light;
+    --ink: #000000;
+    --surface: #111110;
+    --line: #3a372c;
+    --signal: #ffd600;
+    --text: #f5f1dc;
+    --text-2: #c9c2a0;
+    --danger: #ff7a66;
+    --ok: #9fe0a8;
+    --radius: 6px;
+    --step--1: 0.875rem;
+    --step-0: 1rem;
+    --step-1: 1.25rem;
+    --step-2: 1.75rem;
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ink: #ffffff;
+      --surface: #f6f4ec;
+      --line: #c9c4ad;
+      --signal: #5c4400;
+      --text: #14130f;
+      --text-2: #4d4936;
+      --danger: #a3271a;
+      --ok: #1f6b2b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--text);
+    font: 400 var(--step-0)/1.5 system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  ::selection { background: var(--signal); color: var(--ink); }
+  :focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+  .wrap { max-width: 72rem; margin: 0 auto; padding: var(--space-6) var(--space-4) var(--space-8); }
+  header { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: var(--space-4); }
+  h1 { margin: 0; font-size: var(--step-2); line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { margin: 0 0 var(--space-3); font-size: var(--step-1); font-weight: 650; }
+  p { margin: 0; }
+  .muted { color: var(--text-2); }
+  .status { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+  .status li { display: flex; gap: var(--space-2); align-items: center; }
+  .dot { width: 0.625rem; height: 0.625rem; border-radius: 50%; background: var(--text-2); flex: none; }
+  .dot[data-state="ok"] { background: var(--ok); }
+  .dot[data-state="bad"] { background: var(--danger); }
+  main { display: grid; gap: var(--space-8); grid-template-columns: minmax(0, 26rem) minmax(0, 1fr); margin-top: var(--space-6); }
+  @media (max-width: 52rem) { main { grid-template-columns: minmax(0, 1fr); } }
+  form { display: grid; gap: var(--space-4); }
+  label { display: grid; gap: var(--space-1); font-weight: 600; }
+  .hint { font-weight: 400; font-size: var(--step--1); color: var(--text-2); }
+  input[type="text"], input[type="password"], textarea {
+    width: 100%; font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-3);
+    min-height: 2.75rem; caret-color: var(--signal);
+  }
+  textarea { min-height: 5rem; resize: vertical; }
+  input[type="file"] { font: inherit; color: var(--text-2); min-height: 2.75rem; }
+  input[type="file"]::file-selector-button {
+    font: inherit; font-weight: 600; margin-right: var(--space-3); padding: var(--space-2) var(--space-4);
+    color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+  }
+  fieldset { border: 0; padding: 0; margin: 0; }
+  legend { font-weight: 600; margin-bottom: var(--space-2); }
+  .presets { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .preset {
+    font: inherit; font-size: var(--step--1); color: var(--text); background: transparent;
+    border: 1px solid var(--line); border-radius: 999px; padding: var(--space-2) var(--space-3); min-height: 2.75rem; cursor: pointer;
+  }
+  .preset[aria-pressed="true"] { border-color: var(--signal); color: var(--signal); }
+  .primary {
+    font: inherit; font-weight: 700; color: var(--ink); background: var(--signal);
+    border: 0; border-radius: var(--radius); padding: var(--space-3) var(--space-6); min-height: 3rem; cursor: pointer; justify-self: start;
+  }
+  .primary[disabled] { opacity: 0.55; cursor: progress; }
+  .answer { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-4); min-height: 4.5rem; }
+  .answer[data-state="error"] { border-color: var(--danger); }
+  .answer[data-state="error"] .answer-text { color: var(--danger); }
+  .answer-text { font-size: var(--step-1); line-height: 1.4; }
+  .answer-meta { margin-top: var(--space-2); font-size: var(--step--1); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: var(--space-3) var(--space-2); border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: var(--step--1); font-weight: 600; color: var(--text-2); }
+  td.num { text-align: right; white-space: nowrap; }
+  .table-scroll { overflow-x: auto; }
+  .empty { padding: var(--space-6) 0; color: var(--text-2); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (prefers-reduced-motion: no-preference) {
+    .preset, .primary { transition: border-color 120ms ease-out, opacity 120ms ease-out; }
+  }
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>👁️ Gören Göz - VLM Monitor</h1>
-            <p>Real-time Vision Language Model Response Monitoring</p>
-            <div class="status" id="status">Connecting...</div>
-        </header>
-        
-        <div class="controls">
-            <button onclick="refreshHistory()">🔄 Refresh Now</button>
-            <button onclick="clearHistory()">🗑️ Clear History</button>
-            <button onclick="toggleAutoRefresh()">⏸️ Auto-refresh: ON</button>
-        </div>
-        
-        <div class="stats" id="stats">
-            <div class="stat-card">
-                <div class="stat-value" id="total-requests">0</div>
-                <div class="stat-label">Total Requests</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="avg-time">0ms</div>
-                <div class="stat-label">Avg Response Time</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="vlm-count">0</div>
-                <div class="stat-label">VLM Responses</div>
-            </div>
-        </div>
-        
-        <div id="history-container" class="history-container">
-            <div class="empty-state">
-                <h3>No requests yet...</h3>
-                <p>Waiting for VLM requests from the mobile app</p>
-            </div>
-        </div>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Sunucu izleme</h1>
+      <p class="muted">Yalnız bu makineden açılır. Görüntü saklanmaz.</p>
     </div>
-    
-    <div class="refresh-indicator" id="refresh-indicator">2s</div>
-    
-    <script>
-        let autoRefresh = true;
-        let refreshInterval = 2000; // 2 seconds
-        let lastRequestCount = 0;
-        
-        async function refreshHistory() {
-            try {
-                const response = await fetch('/api/ask_context_history');
-                const data = await response.json();
-                
-                if (data.success) {
-                    document.getElementById('status').textContent = '✓ Connected';
-                    document.getElementById('status').classList.remove('error');
-                    renderHistory(data.history);
-                    updateStats(data.history);
-                    
-                    // Highlight new requests
-                    if (data.count > lastRequestCount) {
-                        const cards = document.querySelectorAll('.request-card');
-                        for (let i = 0; i < data.count - lastRequestCount; i++) {
-                            if (cards[i]) {
-                                cards[i].classList.add('new');
-                                setTimeout(() => cards[i].classList.remove('new'), 3000);
-                            }
-                        }
-                    }
-                    lastRequestCount = data.count;
-                } else {
-                    showError('Invalid response from server');
-                }
-            } catch (error) {
-                showError('Failed to fetch history: ' + error.message);
-                console.error('Error:', error);
-            }
-        }
-        
-        function renderHistory(history) {
-            const container = document.getElementById('history-container');
-            
-            if (history.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <h3>No requests yet...</h3>
-                        <p>Waiting for VLM requests from the mobile app</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Reverse to show newest first
-            container.innerHTML = history.reverse().map((item, idx) => `
-                <div class="request-card">
-                    <div class="timestamp">
-                        ${new Date(item.timestamp).toLocaleString()}
-                    </div>
-                    
-                    <div class="question">
-                        Q: ${escapeHtml(item.question)}
-                    </div>
-                    
-                    <div class="image-container">
-                        ${item.image_base64 ? `<img src="data:image/jpeg;base64,${item.image_base64}" alt="Request image" loading="lazy">` : '<div class="no-image">No image available</div>'}
-                    </div>
-                    
-                    <div class="answer">
-                        <div class="answer-label">Answer:</div>
-                        <div>${escapeHtml(item.answer)}
-                            ${item.metadata && item.metadata.source ? `<span class="source ${item.metadata.source}">${item.metadata.source.toUpperCase()}</span>` : ''}
-                        </div>
-                    </div>
-                    
-                    <div class="metadata">
-                        <div class="metadata-item">
-                            <span class="metadata-label">Response Time:</span>
-                            <span class="metadata-value">${item.processing_time_ms.toFixed(0)}ms</span>
-                        </div>
-                        <div class="metadata-item">
-                            <span class="metadata-label">Detections:</span>
-                            <span class="metadata-value">${item.metadata?.detections_count || 0}</span>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        function updateStats(history) {
-            if (history.length === 0) return;
-            
-            const totalRequests = history.length;
-            const avgTime = (history.reduce((sum, h) => sum + h.processing_time_ms, 0) / totalRequests).toFixed(0);
-            const vlmCount = history.filter(h => h.metadata?.source === 'vlm').length;
-            
-            document.getElementById('total-requests').textContent = totalRequests;
-            document.getElementById('avg-time').textContent = avgTime + 'ms';
-            document.getElementById('vlm-count').textContent = vlmCount;
-        }
-        
-        function showError(message) {
-            const status = document.getElementById('status');
-            status.textContent = '✗ ' + message;
-            status.classList.add('error');
-        }
-        
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, m => map[m]);
-        }
-        
-        function toggleAutoRefresh() {
-            autoRefresh = !autoRefresh;
-            const btn = event.target;
-            btn.textContent = autoRefresh ? '⏸️ Auto-refresh: ON' : '▶️ Auto-refresh: OFF';
-            if (autoRefresh) {
-                startAutoRefresh();
-            }
-        }
-        
-        function clearHistory() {
-            if (confirm('Clear history? This cannot be undone.')) {
-                lastRequestCount = 0;
-                document.getElementById('history-container').innerHTML = `
-                    <div class="empty-state">
-                        <h3>History cleared</h3>
-                        <p>Waiting for new VLM requests...</p>
-                    </div>
-                `;
-            }
-        }
-        
-        function updateRefreshIndicator() {
-            const indicator = document.getElementById('refresh-indicator');
-            const now = new Date();
-            const secs = Math.ceil((refreshInterval - (now.getMilliseconds())) / 1000);
-            indicator.textContent = Math.max(1, secs) + 's';
-        }
-        
-        function startAutoRefresh() {
-            if (autoRefresh) {
-                setInterval(() => {
-                    if (autoRefresh) {
-                        refreshHistory();
-                        updateRefreshIndicator();
-                    }
-                }, refreshInterval);
-                updateRefreshIndicator();
-            }
-        }
-        
-        // Initial load
-        refreshHistory();
-        startAutoRefresh();
-    </script>
+    <ul class="status" aria-live="polite" id="status">
+      <li><span class="dot" id="dot-depth"></span><span id="txt-depth">Derinlik: bekleniyor</span></li>
+      <li><span class="dot" id="dot-detect"></span><span id="txt-detect">Tespit: bekleniyor</span></li>
+      <li><span class="dot" id="dot-vlm"></span><span id="txt-vlm">VLM: bekleniyor</span></li>
+    </ul>
+  </header>
+
+  <main>
+    <section aria-labelledby="ask-title">
+      <h2 id="ask-title">Soru dene</h2>
+      <form id="ask-form" novalidate>
+        <label>API anahtarı
+          <span class="hint">Tarayıcı kapanınca unutulur.</span>
+          <input type="password" id="api-key" autocomplete="off" spellcheck="false">
+        </label>
+        <label>Kare
+          <span class="hint">JPEG ya da PNG, en fazla 5 MB.</span>
+          <input type="file" id="image" accept="image/jpeg,image/png" required>
+        </label>
+        <fieldset>
+          <legend>Hazır sorular</legend>
+          <div class="presets" id="presets"><span class="muted">Yükleniyor</span></div>
+        </fieldset>
+        <label>Soru
+          <textarea id="question" maxlength="300" required></textarea>
+        </label>
+        <button class="primary" type="submit" id="ask-btn">Soruyu gönder</button>
+      </form>
+      <div class="answer" id="answer" aria-live="polite" style="margin-top: var(--space-6)">
+        <p class="answer-text muted" id="answer-text">Cevap burada görünür.</p>
+        <p class="answer-meta" id="answer-meta"></p>
+      </div>
+    </section>
+
+    <section aria-labelledby="history-title">
+      <h2 id="history-title">Son sorular</h2>
+      <div class="table-scroll">
+        <table>
+          <caption class="sr-only">Son 50 soru ve cevap</caption>
+          <thead><tr><th scope="col">Saat</th><th scope="col">Soru</th><th scope="col">Cevap</th><th scope="col" class="num">Süre</th></tr></thead>
+          <tbody id="history"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="history-empty">Henüz soru yok. Soldaki formdan bir soru gönderin.</p>
+    </section>
+  </main>
+</div>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const keyInput = $("api-key");
+  try { keyInput.value = sessionStorage.getItem("gg-key") || ""; } catch (_) {}
+  keyInput.addEventListener("change", () => {
+    try { sessionStorage.setItem("gg-key", keyInput.value); } catch (_) {}
+    loadPresets();
+  });
+  const headers = () => (keyInput.value ? { "X-API-Key": keyInput.value } : {});
+
+  function setStatus(name, ok, label) {
+    $("dot-" + name).dataset.state = ok === null ? "" : ok ? "ok" : "bad";
+    $("txt-" + name).textContent = label;
+  }
+
+  async function loadHealth() {
+    try {
+      const h = await (await fetch("/health")).json();
+      setStatus("depth", h.depth_loaded, "Derinlik: " + (h.depth_loaded ? "yüklü" : "yok"));
+      setStatus("detect", h.detector_loaded, "Tespit: " + (h.detector_loaded ? "yüklü" : "yok"));
+      const vlm = h.vlm_ready === null ? "denenmedi" : h.vlm_ready ? "hazır" : "kapalı";
+      setStatus("vlm", h.vlm_ready, "VLM: " + vlm + " (" + h.vlm_model + ")");
+    } catch (_) {
+      setStatus("depth", false, "Sunucuya ulaşılamadı");
+      setStatus("detect", null, "Tespit: bilinmiyor");
+      setStatus("vlm", null, "VLM: bilinmiyor");
+    }
+  }
+
+  async function loadPresets() {
+    const box = $("presets");
+    try {
+      const res = await fetch("/api/preset_questions", { headers: headers() });
+      if (!res.ok) throw new Error();
+      const { preset_questions } = await res.json();
+      box.replaceChildren(...Object.values(preset_questions).map((q) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "preset"; b.textContent = q; b.setAttribute("aria-pressed", "false");
+        b.addEventListener("click", () => {
+          box.querySelectorAll(".preset").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+          $("question").value = q;
+        });
+        return b;
+      }));
+    } catch (_) {
+      box.innerHTML = '<span class="muted">Hazır sorular alınamadı. API anahtarını girin.</span>';
+    }
+  }
+
+  function row(item) {
+    const tr = document.createElement("tr");
+    const time = new Date(item.timestamp).toLocaleTimeString("tr-TR");
+    [time, item.question, item.answer].forEach((t) => { const td = document.createElement("td"); td.textContent = t; tr.append(td); });
+    const ms = document.createElement("td"); ms.className = "num"; ms.textContent = Math.round(item.processing_time_ms) + " ms"; tr.append(ms);
+    return tr;
+  }
+
+  async function loadHistory() {
+    try {
+      const { history } = await (await fetch("/api/ask_context_history")).json();
+      $("history").replaceChildren(...history.slice().reverse().map(row));
+      $("history-empty").hidden = history.length > 0;
+    } catch (_) { /* sonraki turda tekrar dener */ }
+  }
+
+  $("ask-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const file = $("image").files[0];
+    const question = $("question").value.trim();
+    const answer = $("answer");
+    if (!file || !question) {
+      answer.dataset.state = "error";
+      $("answer-text").textContent = !file ? "Bir kare seçin." : "Bir soru yazın ya da hazır soru seçin.";
+      $("answer-meta").textContent = "";
+      (!file ? $("image") : $("question")).focus();
+      return;
+    }
+    const btn = $("ask-btn");
+    btn.disabled = true; btn.textContent = "Soruluyor";
+    answer.dataset.state = ""; $("answer-text").textContent = "Cevap bekleniyor."; $("answer-meta").textContent = "";
+    const body = new FormData(); body.append("image", file); body.append("question", question);
+    try {
+      const res = await fetch("/api/ask_context", { method: "POST", body, headers: headers() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ? data.error.message : "İstek başarısız.");
+      $("answer-text").classList.remove("muted");
+      $("answer-text").textContent = data.answer;
+      $("answer-meta").textContent = data.model + ", " + Math.round(data.processing_time_ms) + " ms, " + data.detections_count + " nesne";
+      loadHistory();
+    } catch (err) {
+      answer.dataset.state = "error";
+      $("answer-text").textContent = err.message || "Sunucuya ulaşılamadı.";
+    } finally {
+      btn.disabled = false; btn.textContent = "Soruyu gönder";
+    }
+  });
+
+  loadHealth(); loadPresets(); loadHistory();
+  setInterval(() => { if (!document.hidden) { loadHealth(); loadHistory(); } }, 5000);
+})();
+</script>
 </body>
 </html>

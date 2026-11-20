@@ -51,3 +51,8 @@ screenshots/
 training/datasets/
 training/runs/
 _archive/
+.venv*/
+*.onnx.data
+*.bin
+mobile_app/assets/models/*
+!mobile_app/assets/models/.gitkeep

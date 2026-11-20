@@ -1,141 +1,132 @@
-"""
-Unit tests for alert service.
-"""
+"""Uyarı kuralı, histerezis ve TTC testleri."""
+
+from __future__ import annotations
 
 import pytest
-import numpy as np
-from unittest.mock import MagicMock, patch
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from core.config import Settings
+from services.alert_service import AlertLevel, LevelHysteresis, ObjectHazard, assess, object_level
+from services.detection import Detection
+from services.proximity import RegionProximity
+from services.tracking import Tracker
 
-from services.alert_service import AlertService, AlertLevel
+S = Settings(_env_file=None)
 
 
-class TestAlertService:
-    """Test suite for AlertService."""
-    
-    def test_initialization(self):
-        """Test AlertService initialization."""
-        service = AlertService()
-        assert service is not None
-        assert service.min_distance == 0.5
-        assert service.warning_distance == 1.2
-        assert service.warning_area_threshold == 0.10
-    
-    def test_alert_level_enum(self):
-        """Test AlertLevel enum values."""
-        assert AlertLevel.SAFE.value == "SAFE"
-        assert AlertLevel.FAR.value == "FAR"
-        assert AlertLevel.MEDIUM.value == "MEDIUM"
-        assert AlertLevel.NEAR.value == "NEAR"
-        assert AlertLevel.DANGER.value == "DANGER"
-    
-    def test_analyze_depth_safe_scenario(self):
-        """Test safe depth map analysis."""
-        service = AlertService()
-        
-        # Create safe depth map (all values > warning distance)
-        depth_map = np.full((480, 640), 3.0, dtype=np.float32)
-        
-        result = service.analyze_depth(depth_map)
-        assert result['alert_level'] == AlertLevel.SAFE
-        assert 'distance_stats' in result
-        assert result['distance_stats']['min'] >= service.warning_distance
-    
-    def test_analyze_depth_danger_scenario(self):
-        """Test dangerous depth map analysis."""
-        service = AlertService()
-        
-        # Create dangerous depth map with >10% area < min_distance
-        depth_map = np.full((480, 640), 3.0, dtype=np.float32)
-        depth_map[:48, :] = 0.3  # First 48 rows = ~10% area, very close
-        
-        result = service.analyze_depth(depth_map)
-        assert result['alert_level'] == AlertLevel.DANGER
-        assert any(w['level'] == 'DANGER' for w in result['warnings'])
-    
-    def test_analyze_depth_near_scenario(self):
-        """Test near obstacle scenario."""
-        service = AlertService()
-        
-        # Create near obstacle depth map (0.5-1.2m range)
-        depth_map = np.full((480, 640), 3.0, dtype=np.float32)
-        depth_map[:48, :] = 0.8  # ~10% area, in near range
-        
-        result = service.analyze_depth(depth_map)
-        assert result['alert_level'] in [AlertLevel.NEAR, AlertLevel.DANGER]
-    
-    def test_distance_statistics(self, sample_depth_map):
-        """Test distance statistics calculation."""
-        service = AlertService()
-        result = service.analyze_depth(sample_depth_map)
-        
-        stats = result['distance_stats']
-        assert 'min' in stats
-        assert 'max' in stats
-        assert 'avg' in stats
-        assert stats['min'] <= stats['avg'] <= stats['max']
-        assert stats['min'] >= 0.0
-        assert stats['max'] <= 10.0  # Reasonable max
-    
-    def test_regional_analysis(self, sample_depth_map):
-        """Test regional (left/center/right) analysis."""
-        service = AlertService()
-        result = service.analyze_depth(sample_depth_map)
-        
-        assert 'regional_alerts' in result
-        regions = result['regional_alerts']
-        
-        for region in ['left', 'center', 'right']:
-            assert region in regions
-            assert 'alert_level' in regions[region]
-            assert 'min_distance' in regions[region]
-            assert 'has_obstacle' in regions[region]
-            assert 'message' in regions[region]
-    
-    def test_area_percentages(self, sample_depth_map):
-        """Test area percentage calculation."""
-        service = AlertService()
-        result = service.analyze_depth(sample_depth_map)
-        
-        areas = result.get('area_percentages', {})
-        if areas:
-            total = sum(areas.values())
-            assert 0.99 <= total <= 1.01  # Should sum to ~1.0
-    
-    def test_empty_depth_map(self):
-        """Test handling of empty/invalid depth map."""
-        service = AlertService()
-        result = service.analyze_depth(None)
-        assert result['alert_level'] == AlertLevel.SAFE
-    
-    def test_invalid_values_handling(self):
-        """Test handling of NaN and Inf values."""
-        service = AlertService()
-        
-        # Depth map with invalid values
-        depth_map = np.full((480, 640), 2.0, dtype=np.float32)
-        depth_map[:100, :] = np.nan
-        depth_map[100:150, :] = np.inf
-        
-        result = service.analyze_depth(depth_map)
-        # Should still process and return valid result
-        assert 'alert_level' in result
-        assert 'distance_stats' in result
-    
-    def test_warning_area_threshold(self):
-        """Test warning area threshold sensitivity."""
-        service = AlertService()
-        
-        # Test boundary: exactly at threshold
-        depth_map = np.full((480, 640), 3.0, dtype=np.float32)
-        # 10% area at danger level
-        danger_pixels = int(480 * 640 * 0.10)
-        depth_map.flat[:danger_pixels] = 0.3
-        
-        result = service.analyze_depth(depth_map)
-        # Should trigger warning
-        assert result['alert_level'] in [AlertLevel.DANGER, AlertLevel.NEAR]
-        assert len(result['warnings']) > 0
+def hazard(region="center", ttc=None, dist=None, name="insan", priority=10) -> ObjectHazard:
+    return ObjectHazard(name, region, priority, ttc, dist)
+
+
+@pytest.mark.parametrize(
+    ("obj", "expected"),
+    [
+        (hazard(ttc=1.5), AlertLevel.DANGER),
+        (hazard(dist=0.8), AlertLevel.DANGER),
+        (hazard(region="left", ttc=1.5), AlertLevel.NEAR),
+        (hazard(ttc=3.0), AlertLevel.NEAR),
+        (hazard(dist=1.5), AlertLevel.NEAR),
+        (hazard(ttc=8.0, dist=5.0), AlertLevel.INFO),
+        (hazard(), AlertLevel.INFO),
+    ],
+    ids=["ttc-danger", "dist-danger", "side-capped", "ttc-near", "dist-near", "far", "no-signal"],
+)
+def test_object_level(obj, expected):
+    assert object_level(obj, S) == expected
+
+
+def test_near_band_is_reachable():
+    """Eski D2 hatası: orta bant maskesi hep boştu. Yeni kural NEAR'a ulaşır."""
+    result = assess([hazard(dist=1.9)], None, S)
+    assert result.level == AlertLevel.NEAR
+    assert result.message == "Dikkat. İnsan, önde, 2 metre."
+
+
+def test_message_puts_action_first():
+    assert assess([hazard(ttc=1.0)], None, S).message == "Dur. İnsan, önde."
+    side = assess([hazard(region="right", ttc=3.0, name="direk")], None, S)
+    assert side.message == "Dikkat. Direk, sağda."
+
+
+def test_clear_path_only_when_depth_is_known():
+    regions = {r: RegionProximity(0.2, 0.0, "uzak") for r in ("left", "center", "right")}
+    assert assess([], regions, S).message == "Yol açık."
+    # Derinlik yoksa "Yol açık" denmez: yanlış güven riski.
+    assert assess([], None, S).message == ""
+
+
+def test_no_clear_path_without_detector():
+    """Tespit modeli yoksa boş nesne listesi "yol açık" demek değildir (plan 9)."""
+    regions = {r: RegionProximity(0.2, 0.0, "uzak") for r in ("left", "center", "right")}
+    result = assess([], regions, S, detector_ok=False)
+    assert result.level == AlertLevel.CLEAR
+    assert result.message == ""
+
+
+def test_close_depth_in_center_raises_to_near():
+    regions = {
+        "left": RegionProximity(0.2, 0.0, "uzak"),
+        "center": RegionProximity(0.95, 0.3, "çok yakın"),
+        "right": RegionProximity(0.2, 0.0, "uzak"),
+    }
+    result = assess([], regions, S)
+    assert result.level == AlertLevel.NEAR
+    assert result.message == "Dikkat. Önde engel."
+
+
+def test_highest_level_object_wins():
+    result = assess([hazard(region="left", name="bank"), hazard(ttc=1.0, name="araç")], None, S)
+    assert result.top is not None and result.top.name_tr == "araç"
+
+
+def test_hysteresis_raises_after_two_and_lowers_after_five():
+    h = LevelHysteresis(raise_after=2, lower_after=5)
+    assert h.update(AlertLevel.DANGER) == AlertLevel.CLEAR
+    assert h.update(AlertLevel.DANGER) == AlertLevel.DANGER
+    for _ in range(4):
+        assert h.update(AlertLevel.CLEAR) == AlertLevel.DANGER
+    assert h.update(AlertLevel.CLEAR) == AlertLevel.CLEAR
+
+
+def test_hysteresis_ignores_single_spike():
+    h = LevelHysteresis()
+    h.update(AlertLevel.DANGER)
+    assert h.update(AlertLevel.CLEAR) == AlertLevel.CLEAR
+
+
+def test_hysteresis_raises_to_lowest_level_in_streak():
+    h = LevelHysteresis()
+    h.update(AlertLevel.DANGER)
+    assert h.update(AlertLevel.NEAR) == AlertLevel.NEAR
+
+
+def test_ttc_from_growing_box():
+    tracker = Tracker(max_age_s=5.0)
+    infos = []
+    for step in range(6):
+        h = 100 + 50 * step
+        det = Detection("person", 0.9, (300.0, 400.0 - h, 340.0, 400.0), "center")
+        infos = tracker.update([det], now=float(step))
+    last = infos[0]
+    # Son kare: h = 350, dh/dt = 50 px/s → TTC ≈ 7 s.
+    assert last.is_approaching
+    assert last.ttc_s == pytest.approx(7.0, rel=0.05)
+
+
+def test_static_box_is_not_approaching():
+    tracker = Tracker()
+    det = Detection("chair", 0.8, (100.0, 100.0, 200.0, 300.0), "left")
+    tracker.update([det], now=0.0)
+    info = tracker.update([det], now=0.5)[0]
+    assert not info.is_approaching
+    assert info.ttc_s is None
+
+
+def test_tracker_keeps_two_same_class_objects_apart():
+    """Eski D8 hatası: aynı sınıftan iki nesne aynı track_id alıyordu."""
+    tracker = Tracker()
+    a = Detection("person", 0.9, (10.0, 10.0, 60.0, 200.0), "left")
+    b = Detection("person", 0.9, (500.0, 10.0, 560.0, 200.0), "right")
+    first = tracker.update([a, b], now=0.0)
+    second = tracker.update([a, b], now=0.5)
+    assert first[0].track_id != first[1].track_id
+    assert [i.track_id for i in second] == [i.track_id for i in first]

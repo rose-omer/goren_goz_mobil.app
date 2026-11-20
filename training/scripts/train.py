@@ -18,8 +18,8 @@ from ultralytics import YOLO
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Gören Göz YOLO Fine-tuning')
-    parser.add_argument('--model', type=str, default='yolo11n.pt',
-                        help='Base model (yolo11n.pt, yolo11s.pt)')
+    parser.add_argument('--model', type=str, default='yolo26n.pt',
+                        help='Base model (yolo26n.pt, yolo26s.pt)')
     parser.add_argument('--data', type=str, default='configs/dataset.yaml',
                         help='Dataset config path')
     parser.add_argument('--epochs', type=int, default=100,
@@ -45,11 +45,11 @@ def train(args):
     print("="*60)
     
     # Base model yükle
-    print(f"\n📦 Base model yükleniyor: {args.model}")
+    print(f"\nBase model yükleniyor: {args.model}")
     model = YOLO(args.model)
     
     # Fine-tune başlat
-    print(f"\n🚀 Eğitim başlıyor... (Epochs: {args.epochs})\n")
+    print(f"\nEğitim başlıyor... (Epochs: {args.epochs})\n")
     
     results = model.train(
         data=args.data,
@@ -73,8 +73,8 @@ def train(args):
         plots=True
     )
     
-    print("\n✅ Eğitim tamamlandı!")
-    print(f"📁 Best model: runs/train/{args.name}/weights/best.pt")
+    print("\nEğitim tamamlandı!")
+    print(f"Best model: runs/train/{args.name}/weights/best.pt")
     
     return results
 

@@ -1,0 +1,12 @@
+{
+  "repo_id": "rose-omer/goren-goz-models",
+  "revision": "REPLACE_WITH_40_CHAR_COMMIT",
+  "files": [
+    {"name": "openvino/MiDaS_small.xml", "target": "backend", "sha256": null},
+    {"name": "openvino/MiDaS_small.bin", "target": "backend", "sha256": null},
+    {"name": "yolo26n.pt", "target": "backend", "sha256": null},
+    {"name": "yolo26n_goren_goz_int8.tflite", "target": "mobile", "sha256": null},
+    {"name": "depth_anything_small_256.tflite", "target": "mobile", "sha256": null},
+    {"name": "labels_tr.json", "target": "mobile", "sha256": null}
+  ]
+}

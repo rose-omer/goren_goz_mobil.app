@@ -1,114 +1,129 @@
-"""
-Backend Configuration Management
-=================================
+"""Uygulama ayarları: tek kaynak pydantic-settings v2.
 
-Manages application settings from environment variables and config.yaml.
-Uses Pydantic BaseSettings for validation.
+Öncelik sırası: ortam değişkeni > `.env` > `config.yaml` > varsayılan.
 """
 
-import os
-import yaml
+from __future__ import annotations
+
+from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
-from pydantic_settings import BaseSettings
-from pydantic import Field
+from typing import Annotated, Literal
+
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import (
+    BaseSettings,
+    NoDecode,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+YAML_PATH = BACKEND_DIR / "config.yaml"
+
+# Planın önerdiği aday setin ilki. Türkçe ölçümden sonra VLM_MODEL ile değiştir.
+DEFAULT_VLM_MODEL = "SmolVLM2-500M-Video-Instruct"
 
 
 class Settings(BaseSettings):
-    """Application settings with validation."""
-    
-    # Server settings
-    host: str = Field(default="0.0.0.0", env="HOST")
-    port: int = Field(default=8000, env="PORT")
-    environment: str = Field(default="development", env="ENVIRONMENT")
-    debug: bool = Field(default=True, env="DEBUG")
-    
-    # CORS settings
-    cors_origins: List[str] = Field(
-        default=["*"],  # Allow all origins in development
-        env="CORS_ORIGINS"
+    """Bütün çalışma ayarları. Alan adı = ortam değişkeni adı (büyük harf)."""
+
+    model_config = SettingsConfigDict(
+        env_file=BACKEND_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        yaml_file=YAML_PATH,
+        yaml_file_encoding="utf-8",
     )
-    
-    # Rate limiting
-    rate_limit_per_second: int = Field(default=5, env="RATE_LIMIT")
-    
-    # Logging
-    log_level: str = Field(default="INFO", env="LOG_LEVEL")
-    
-    # Model settings (from config.yaml)
-    model_type: str = "MiDaS_small"
-    model_device: str = "auto"
-    use_openvino: bool = False  # ✅ OpenVINO optimization
-    openvino_device: str = "GPU"  # GPU, CPU, AUTO
-    use_depth_anything_v2: bool = False  # ✅ Feature flag
-    min_depth: float = 0.5
-    max_depth: float = 5.0
-    
-    # Alert settings - CALIBRATED for better detection
-    alert_min_distance: float = 0.5       # 0.7 -> 0.5m (only very close = danger)
-    alert_warning_distance: float = 1.2   # 1.5 -> 1.2m (warning zone)
-    warning_area_threshold: float = 0.10  # 0.05 -> 0.10 (10% less sensitive, fewer false positives)
-    
-    # Image processing
-    target_width: int = 640
-    target_height: int = 480
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._load_yaml_config()
-    
-    def _load_yaml_config(self):
-        """Load additional settings from config.yaml."""
-        config_path = Path(__file__).parent.parent.parent / "config" / "config.yaml"
-        
-        if not config_path.exists():
-            return
-        
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                yaml_data = yaml.safe_load(f)
-            
-            # Override with YAML values if present
-            if yaml_data:
-                # Model settings
-                model_config = yaml_data.get('depth_model', {})
-                if model_config:
-                    self.model_type = model_config.get('model_type', self.model_type)
-                    self.model_device = model_config.get('device', self.model_device)
-                    self.use_openvino = model_config.get('use_openvino', self.use_openvino)
-                    self.openvino_device = model_config.get('openvino_device', self.openvino_device)
-                    self.min_depth = model_config.get('min_depth', self.min_depth)
-                    self.max_depth = model_config.get('max_depth', self.max_depth)
-                
-                # Alert settings
-                alert_config = yaml_data.get('alerts', {})
-                if alert_config:
-                    self.alert_min_distance = alert_config.get('min_distance', self.alert_min_distance)
-                    self.alert_warning_distance = alert_config.get('warning_distance', self.alert_warning_distance)
-                    self.warning_area_threshold = alert_config.get('warning_area_threshold', self.warning_area_threshold)
-                
-                # Camera settings for image processing
-                camera_config = yaml_data.get('camera', {})
-                if camera_config:
-                    self.target_width = camera_config.get('width', self.target_width)
-                    self.target_height = camera_config.get('height', self.target_height)
-        
-        except Exception as e:
-            print(f"Warning: Failed to load config.yaml: {e}")
+
+    # Sunucu
+    host: str = "127.0.0.1"
+    port: int = 8110
+    environment: str = "development"
+    debug: bool = False
+    log_level: str = "INFO"
+
+    # Güvenlik
+    api_key: str = ""
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    rate_limit_per_minute: int = Field(
+        default=300,
+        validation_alias=AliasChoices("rate_limit_per_minute", "RATE_LIMIT_PER_MINUTE", "RATE_LIMIT"),
+    )
+    ask_rate_limit_per_minute: int = 10
+    max_upload_bytes: int = 5 * 1024 * 1024
+    max_image_pixels: int = 4_000_000
+
+    # Modeller
+    models_dir: Path = BACKEND_DIR / "model_files"
+    depth_backend: Literal["openvino_midas", "depth_anything", "none"] = "openvino_midas"
+    openvino_device: str = "AUTO"
+    midas_model_name: str = "MiDaS_small"
+    depth_anything_model_name: str = "depth_anything_v2_small"
+    yolo_model_path: Path | None = None
+    detection_confidence: float = 0.5
+    max_objects: int = 10
+
+    # Uyarı motoru
+    danger_ttc_s: float = 2.0
+    near_ttc_s: float = 4.0
+    danger_distance_m: float = 1.0
+    near_distance_m: float = 2.0
+    proximity_danger: float = 0.85
+    proximity_near: float = 0.6
+    proximity_area_threshold: float = 0.10
+    raise_after_frames: int = 2
+    lower_after_frames: int = 5
+    session_ttl_s: float = 60.0
+    max_sessions: int = Field(256, ge=1)
+
+    # VLM (llama-server, OpenAI uyumlu uç)
+    vlm_server_url: str = "http://127.0.0.1:8120"
+    vlm_api_key: str = ""
+    vlm_model: str = DEFAULT_VLM_MODEL
+    vlm_timeout_s: float = 30.0
+    vlm_max_tokens: int = 48
+    vlm_temperature: float = 0.2
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        """`CORS_ORIGINS=a,b` biçimini listeye çevirir."""
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @property
+    def midas_xml(self) -> Path:
+        return self.models_dir / "openvino" / f"{self.midas_model_name}.xml"
+
+    @property
+    def depth_anything_xml(self) -> Path:
+        return self.models_dir / "openvino" / f"{self.depth_anything_model_name}.xml"
+
+    @property
+    def yolo_path(self) -> Path:
+        return self.yolo_model_path or self.models_dir / "yolo26n.pt"
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            YamlConfigSettingsSource(settings_cls),
+            file_secret_settings,
+        )
 
 
-# Singleton instance
-_settings: Optional[Settings] = None
-
-
+@lru_cache
 def get_settings() -> Settings:
-    """Get or create settings singleton."""
-    global _settings
-    if _settings is None:
-        _settings = Settings()
-    return _settings
+    """Süreç başına tek ayar nesnesi."""
+    return Settings()

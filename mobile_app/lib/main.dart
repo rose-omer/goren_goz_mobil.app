@@ -1,151 +1,54 @@
-///
-/// Gören Göz Mobil - Main App Entry Point
-/// ========================================
-///
+// Gören Göz: görme engelliler için sesli engel uyarısı ve Türkçe soru-cevap.
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-import 'screens/splash_screen.dart';
-import 'screens/camera_screen.dart';
-import 'screens/settings_screen.dart';
-import 'services/api_service.dart';
-import 'services/sound_service.dart';
-import 'services/tts_service.dart';
-import 'utils/constants.dart';
+import 'app.dart';
+import 'perception/frame_source.dart';
+import 'services/api_client.dart';
+import 'services/feedback.dart';
+import 'services/settings_store.dart';
+import 'services/speech_input.dart';
 
-void main() async {
+class DevicePermissions implements PermissionGate {
+  @override
+  Future<bool> cameraGranted() => Permission.camera.isGranted;
+
+  @override
+  Future<bool> requestCamera() async => (await Permission.camera.request()).isGranted;
+
+  @override
+  Future<void> openSettings() async {
+    await openAppSettings();
+  }
+}
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Lock orientation to portrait
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
-  
-  // Set system UI overlay style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ),
-  );
-  
-  runApp(const GorenGozApp());
-}
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-class GorenGozApp extends StatefulWidget {
-  const GorenGozApp({super.key});
+  final settings = await SettingsStore.load();
+  final speaker = TtsSpeaker();
+  await speaker.configure(rate: settings.speechRate, volume: settings.volume);
+  ApiClient? client;
 
-  @override
-  State<GorenGozApp> createState() => _GorenGozAppState();
-}
-
-class _GorenGozAppState extends State<GorenGozApp> {
-  ThemeMode _themeMode = ThemeMode.dark;
-  bool _highContrast = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadThemeSettings();
-  }
-
-  Future<void> _loadThemeSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      final isDark = prefs.getBool('dark_mode') ?? true;
-      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-      _highContrast = prefs.getBool('high_contrast') ?? false;
-    });
-  }
-
-  void updateTheme(bool isDark, bool highContrast) {
-    setState(() {
-      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-      _highContrast = highContrast;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => ApiService()),
-        Provider(create: (_) => SoundService()),
-        Provider(create: (_) => TtsService()),
-      ],
-      child: MaterialApp(
-        title: 'Gören Göz Mobil',
-        debugShowCheckedModeBanner: false,
-        themeMode: _themeMode,
-        theme: _buildLightTheme(),
-        darkTheme: _buildDarkTheme(),
-        initialRoute: '/',
-        routes: {
-          '/': (context) => const SplashScreen(),
-          '/camera': (context) => const CameraScreen(),
-          '/settings': (context) => SettingsScreen(onThemeChanged: updateTheme),
+  runApp(
+    GorenGozApp(
+      services: AppServices(
+        settings: settings,
+        speaker: speaker,
+        haptics: DeviceHaptics(enabled: () => settings.vibration),
+        sounds: AssetSounds(),
+        speechInput: DeviceSpeechInput(),
+        permissions: DevicePermissions(),
+        frameSourceFactory: CameraFrameSource.new,
+        apiFactory: (s) {
+          if (!s.hasServer) return null;
+          client ??= ApiClient(baseUrl: s.serverUrl, apiKey: s.apiKey);
+          return client!..configure(baseUrl: s.serverUrl, apiKey: s.apiKey);
         },
       ),
-    );
-  }
-
-  ThemeData _buildLightTheme() {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
-        brightness: Brightness.light,
-      ).copyWith(
-        primary: _highContrast ? Colors.black : AppColors.primary,
-        surface: _highContrast ? Colors.white : const Color(0xFFF5F5F5),
-      ),
-      textTheme: GoogleFonts.robotoTextTheme().apply(
-        bodyColor: _highContrast ? Colors.black : Colors.black87,
-        displayColor: _highContrast ? Colors.black : Colors.black87,
-      ),
-      scaffoldBackgroundColor: _highContrast ? Colors.white : const Color(0xFFF5F5F5),
-      appBarTheme: AppBarTheme(
-        backgroundColor: _highContrast ? Colors.white : const Color(0xFFF5F5F5),
-        foregroundColor: _highContrast ? Colors.black : Colors.black87,
-        elevation: 0,
-      ),
-      cardTheme: CardThemeData(
-        color: _highContrast ? Colors.white : Colors.white,
-        elevation: _highContrast ? 4 : 1,
-      ),
-    );
-  }
-
-  ThemeData _buildDarkTheme() {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
-        brightness: Brightness.dark,
-      ).copyWith(
-        primary: _highContrast ? Colors.white : AppColors.primary,
-        surface: _highContrast ? Colors.black : const Color(0xFF1E1E1E),
-      ),
-      textTheme: GoogleFonts.robotoTextTheme().apply(
-        bodyColor: _highContrast ? Colors.white : Colors.white70,
-        displayColor: _highContrast ? Colors.white : Colors.white,
-      ),
-      scaffoldBackgroundColor: _highContrast ? Colors.black : Colors.black,
-      appBarTheme: AppBarTheme(
-        backgroundColor: _highContrast ? Colors.black : Colors.black,
-        foregroundColor: _highContrast ? Colors.white : Colors.white,
-        elevation: 0,
-      ),
-      cardTheme: CardThemeData(
-        color: _highContrast ? Colors.black : const Color(0xFF2C2C2C),
-        elevation: _highContrast ? 4 : 1,
-      ),
-    );
-  }
+    ),
+  );
 }

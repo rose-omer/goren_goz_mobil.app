@@ -1,473 +1,370 @@
-///
-/// Settings Screen
-/// ===============
-///
+// Ayarlar (plan 5.2.4). Eşik kaydırıcıları yok (plan M9). Sunucu adresi kalıcı.
 
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/api_service.dart';
-import '../services/sound_service.dart';
-import '../services/tts_service.dart';
-import '../utils/constants.dart';
+import '../app.dart';
+import '../core/hazard_engine.dart';
+import '../services/feedback.dart';
+import '../services/settings_store.dart';
+import '../theme/app_theme.dart';
+import 'texts.dart';
 
-class SettingsScreen extends StatefulWidget {
-  final Function(bool isDark, bool highContrast)? onThemeChanged;
-  
-  const SettingsScreen({super.key, this.onThemeChanged});
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsStore>();
+    final services = context.read<AppServices>();
+
+    Future<void> applyVoice() async {
+      final speaker = services.speaker;
+      if (speaker is TtsSpeaker) {
+        await speaker.configure(rate: settings.speechRate, volume: settings.volume);
+      }
+    }
+
+    void speakSample(String text) => services.speech.enqueue(text, AlertLevel.info, key: 'ornek', force: true);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ayarlar'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, size: 32),
+          tooltip: 'Yürüyüşe dön',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(Space.m, 0, Space.m, Space.xl),
+          children: [
+            const _Section('Ses ve titreşim'),
+            _SliderRow(
+              label: 'Konuşma hızı',
+              value: settings.speechRate,
+              min: 0.3,
+              max: 1.0,
+              onChanged: settings.setSpeechRate,
+              onChangeEnd: (_) async {
+                await applyVoice();
+                speakSample('Konuşma hızı bu.');
+              },
+            ),
+            _SliderRow(
+              label: 'Ses düzeyi',
+              value: settings.volume,
+              min: 0.0,
+              max: 1.0,
+              onChanged: settings.setVolume,
+              onChangeEnd: (_) async {
+                await applyVoice();
+                speakSample('Ses düzeyi bu.');
+              },
+            ),
+            _SwitchRow(
+              title: 'Titreşim',
+              subtitle: 'Tehlikede üç kısa, yakın engelde iki titreşim.',
+              value: settings.vibration,
+              onChanged: (value) async {
+                await settings.setVibration(value);
+                if (value) unawaited(services.haptics.play(HapticPattern.near));
+              },
+            ),
+            const _Section('Anlatım'),
+            _ChoiceGroup<DirectionStyle>(
+              title: 'Yön anlatımı',
+              value: settings.directionStyle,
+              onChanged: settings.setDirectionStyle,
+              options: const {
+                DirectionStyle.sides: ('Solda, önde, sağda', null),
+                DirectionStyle.clock: ('Saat yönü', 'Saat 10, saat 12, saat 2'),
+              },
+            ),
+            _ChoiceGroup<Verbosity>(
+              title: 'Ne söylensin',
+              value: settings.verbosity,
+              onChanged: settings.setVerbosity,
+              options: const {
+                Verbosity.dangerOnly: ('Yalnız tehlike', 'Dur ve Dikkat uyarıları'),
+                Verbosity.all: ('Tehlike ve bilgi', 'Yakındaki nesneler de söylenir'),
+              },
+            ),
+            const _Section('Sunucu'),
+            const _ServerForm(),
+            _SwitchRow(
+              title: 'Sunucu analizi',
+              subtitle: 'Cihaz üstü model eklenene kadar engel algılama sunucuda yapılır.',
+              value: settings.serverAnalysis,
+              onChanged: settings.setServerAnalysis,
+            ),
+            const _Section('Görünüm'),
+            _SwitchRow(
+              title: 'Yardımcı görünümü',
+              subtitle: 'Gören yardımcı için kamera görüntüsü, kutular ve gecikme.',
+              value: settings.assistantView,
+              onChanged: settings.setAssistantView,
+            ),
+            _SwitchRow(
+              title: 'Beyaz tema',
+              subtitle: 'Beyaz zemin, siyah yazı. Kapalıyken siyah zemin, sarı yazı.',
+              value: settings.contrast == Contrast.lightInk,
+              onChanged: (value) => settings.setContrast(value ? Contrast.lightInk : Contrast.darkSignal),
+            ),
+            const _Section('Yardım'),
+            const SizedBox(height: Space.s),
+            OutlinedButton.icon(
+              onPressed: () => speakSample(Texts.tour),
+              icon: const Icon(Icons.hearing, size: 28),
+              label: const Text('Kullanım turunu dinle'),
+            ),
+            const SizedBox(height: Space.m),
+            OutlinedButton.icon(
+              onPressed: () => speakSample(Texts.safety),
+              icon: const Icon(Icons.health_and_safety_outlined, size: 28),
+              label: const Text('Güvenlik uyarısını dinle'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  late TextEditingController _apiUrlController;
-  bool _soundEnabled = true;
-  bool _vibrationEnabled = true;
-  bool _ttsEnabled = true;
-  double _soundVolume = 1.0;
-  double _vibrationIntensity = 1.0;
-  double _speechRate = 0.5;
-  int _frameRate = 1;
-  bool _isDarkMode = true;
-  bool _isHighContrast = false;
-  String _language = 'TR';
-  
-  // Distance thresholds (meters)
-  double _dangerThreshold = 0.5;
-  double _nearThreshold = 1.0;
-  double _mediumThreshold = 2.0;
-  double _farThreshold = 3.0;
+class _Section extends StatelessWidget {
+  const _Section(this.title);
+
+  final String title;
 
   @override
-  void initState() {
-    super.initState();
-    _loadSettings();
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: Space.xl, bottom: Space.s),
+      child: Semantics(header: true, child: Text(title, style: Theme.of(context).textTheme.headlineSmall)),
+    );
   }
+}
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final apiService = context.read<ApiService>();
-    final soundService = context.read<SoundService>();
-    final ttsService = context.read<TtsService>();
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({required this.title, required this.subtitle, required this.value, required this.onChanged});
 
-    setState(() {
-      _apiUrlController = TextEditingController(text: apiService.apiUrl);
-      _soundEnabled = soundService.soundEnabled;
-      _vibrationEnabled = soundService.vibrationEnabled;
-      _ttsEnabled = ttsService.ttsEnabled;
-      _soundVolume = prefs.getDouble('sound_volume') ?? 1.0;
-      _vibrationIntensity = prefs.getDouble('vibration_intensity') ?? 1.0;
-      _speechRate = prefs.getDouble('speech_rate') ?? 0.5;
-      _frameRate = prefs.getInt('frame_rate') ?? 1;
-      _isDarkMode = prefs.getBool('dark_mode') ?? true;
-      _isHighContrast = prefs.getBool('high_contrast') ?? false;
-      _language = prefs.getString('language') ?? 'TR';
-      
-      _dangerThreshold = prefs.getDouble('danger_threshold') ?? 0.5;
-      _nearThreshold = prefs.getDouble('near_threshold') ?? 1.0;
-      _mediumThreshold = prefs.getDouble('medium_threshold') ?? 2.0;
-      _farThreshold = prefs.getDouble('far_threshold') ?? 3.0;
-    });
-  }
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
-  Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final apiService = context.read<ApiService>();
-    final soundService = context.read<SoundService>();
-
-    // Save API settings
-    apiService.setApiUrl(_apiUrlController.text);
-    
-    // Save sound and vibration settings
-    soundService.setSoundEnabled(_soundEnabled);
-    soundService.setVibrationEnabled(_vibrationEnabled);
-    await prefs.setDouble('sound_volume', _soundVolume);
-    await prefs.setDouble('vibration_intensity', _vibrationIntensity);
-    
-    // Save TTS settings
-    final ttsService = context.read<TtsService>();
-    ttsService.setTtsEnabled(_ttsEnabled);
-    ttsService.setSpeechRate(_speechRate);
-    ttsService.setLanguage(_language == 'TR' ? 'tr-TR' : 'en-US');
-    await prefs.setDouble('speech_rate', _speechRate);
-    
-    // Save camera settings
-    await prefs.setInt('frame_rate', _frameRate);
-    
-    // Save theme settings
-    await prefs.setBool('dark_mode', _isDarkMode);
-    await prefs.setBool('high_contrast', _isHighContrast);
-    await prefs.setString('language', _language);
-    
-    // Update theme immediately
-    if (widget.onThemeChanged != null) {
-      widget.onThemeChanged!(_isDarkMode, _isHighContrast);
-    }
-    
-    // Save distance thresholds
-    await prefs.setDouble('danger_threshold', _dangerThreshold);
-    await prefs.setDouble('near_threshold', _nearThreshold);
-    await prefs.setDouble('medium_threshold', _mediumThreshold);
-    await prefs.setDouble('far_threshold', _farThreshold);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_language == 'TR' ? 'Ayarlar kaydedildi' : 'Settings saved'),
-        backgroundColor: Colors.green,
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      value: value,
+      onChanged: onChanged,
+      title: Text(title, style: text.titleMedium),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: Space.xs),
+        child: Text(subtitle, style: text.bodySmall),
       ),
     );
   }
-  
-  Future<void> _resetSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    await _loadSettings();
-    
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_language == 'TR' ? 'Ayarlar sıfırlandı' : 'Settings reset'),
-        backgroundColor: Colors.orange,
+}
+
+class _SliderRow extends StatelessWidget {
+  const _SliderRow({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (value * 100).round();
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: Space.m),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ExcludeSemantics(
+            child: Row(
+              children: [
+                Expanded(child: Text(label, style: text.titleMedium)),
+                Text(
+                  'yüzde $percent',
+                  style: text.bodySmall?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                ),
+              ],
+            ),
+          ),
+          Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: ((max - min) * 10).round(),
+            label: 'yüzde $percent',
+            // Ekran okuyucu: "Konuşma hızı yüzde 60".
+            semanticFormatterCallback: (v) => '$label yüzde ${(v * 100).round()}',
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
+          ),
+        ],
       ),
     );
+  }
+}
+
+class _ChoiceGroup<T> extends StatelessWidget {
+  const _ChoiceGroup({required this.title, required this.value, required this.onChanged, required this.options});
+
+  final String title;
+  final T value;
+  final ValueChanged<T> onChanged;
+  final Map<T, (String, String?)> options;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: Space.m),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(header: true, child: Text(title, style: text.titleMedium)),
+          RadioGroup<T>(
+            groupValue: value,
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
+            child: Column(
+              children: [
+                for (final entry in options.entries)
+                  RadioListTile<T>(
+                    contentPadding: EdgeInsets.zero,
+                    value: entry.key,
+                    title: Text(entry.value.$1, style: text.bodyLarge),
+                    subtitle: entry.value.$2 == null ? null : Text(entry.value.$2!, style: text.bodySmall),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _Probe { idle, checking, ok, failed }
+
+class _ServerForm extends StatefulWidget {
+  const _ServerForm();
+
+  @override
+  State<_ServerForm> createState() => _ServerFormState();
+}
+
+class _ServerFormState extends State<_ServerForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final SettingsStore _settings = context.read<SettingsStore>();
+  late final TextEditingController _url = TextEditingController(text: _settings.serverUrl);
+  late final TextEditingController _key = TextEditingController(text: _settings.apiKey);
+  bool _showKey = false;
+  _Probe _probe = _Probe.idle;
+
+  @override
+  void dispose() {
+    _url.dispose();
+    _key.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveAndCheck() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    await _settings.setServerUrl(_url.text);
+    await _settings.setApiKey(_key.text);
+    if (!mounted) return;
+    final api = context.read<AppServices>().apiFactory(_settings);
+    setState(() => _probe = _Probe.checking);
+    final ok = await api?.health() ?? false;
+    if (!mounted) return;
+    setState(() => _probe = ok ? _Probe.ok : _Probe.failed);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_language == 'TR' ? 'Ayarlar' : 'Settings'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.restore),
-            tooltip: _language == 'TR' ? 'Sıfırla' : 'Reset',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text(_language == 'TR' ? 'Ayarları Sıfırla' : 'Reset Settings'),
-                  content: Text(_language == 'TR' 
-                    ? 'Tüm ayarlar varsayılan değerlere döndürülecek. Emin misiniz?'
-                    : 'All settings will be reset to defaults. Are you sure?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(_language == 'TR' ? 'İptal' : 'Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _resetSettings();
-                      },
-                      child: Text(_language == 'TR' ? 'Sıfırla' : 'Reset'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppDimensions.paddingMedium),
+    final p = Palette.of(context);
+    final text = Theme.of(context).textTheme;
+    final (message, color) = switch (_probe) {
+      _Probe.idle => (null, p.inkMuted),
+      _Probe.checking => ('Bağlantı deneniyor.', p.inkMuted),
+      _Probe.ok => ('Kaydedildi. Sunucu cevap veriyor.', p.ink),
+      _Probe.failed => ('Kaydedildi ama sunucu cevap vermedi. Adresi ve ağı denetleyin.', p.danger),
+    };
+
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Language Selection
-          _buildSectionTitle(_language == 'TR' ? '🌐 Dil Seçimi' : '🌐 Language'),
-          Card(
-            child: ListTile(
-              title: Text(_language == 'TR' ? 'Dil' : 'Language'),
-              trailing: DropdownButton<String>(
-                value: _language,
-                items: [
-                  DropdownMenuItem(value: 'TR', child: Text('🇹🇷 Türkçe')),
-                  DropdownMenuItem(value: 'EN', child: Text('🇬🇧 English')),
-                ].toList(),
-                onChanged: (value) => setState(() => _language = value!),
+          const SizedBox(height: Space.s),
+          TextFormField(
+            controller: _url,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            textInputAction: TextInputAction.next,
+            style: text.bodyLarge?.copyWith(color: p.ink),
+            decoration: InputDecoration(labelText: 'Sunucu adresi', helperText: serverUrlHelp(), helperMaxLines: 3),
+            validator: (value) => validateServerUrl(value ?? ''),
+          ),
+          const SizedBox(height: Space.m),
+          TextFormField(
+            controller: _key,
+            obscureText: !_showKey,
+            autocorrect: false,
+            enableSuggestions: false,
+            style: text.bodyLarge?.copyWith(color: p.ink),
+            decoration: InputDecoration(
+              labelText: 'API anahtarı',
+              helperText: 'Sunucudaki API_KEY değeri.',
+              suffixIcon: IconButton(
+                iconSize: 28,
+                tooltip: _showKey ? 'Anahtarı gizle' : 'Anahtarı göster',
+                icon: Icon(_showKey ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _showKey = !_showKey),
               ),
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Distance Thresholds
-          _buildSectionTitle(_language == 'TR' ? '📏 Mesafe Eşikleri' : '📏 Distance Thresholds'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildSlider(
-                    label: _language == 'TR' ? 'TEHLİKE' : 'DANGER',
-                    value: _dangerThreshold,
-                    min: 0.3,
-                    max: 1.0,
-                    divisions: 7,
-                    color: AppColors.danger,
-                    onChanged: (v) => setState(() => _dangerThreshold = v),
-                  ),
-                  _buildSlider(
-                    label: _language == 'TR' ? 'YAKIN' : 'NEAR',
-                    value: _nearThreshold,
-                    min: 0.5,
-                    max: 2.0,
-                    divisions: 15,
-                    color: AppColors.near,
-                    onChanged: (v) => setState(() => _nearThreshold = v),
-                  ),
-                  _buildSlider(
-                    label: _language == 'TR' ? 'ORTA' : 'MEDIUM',
-                    value: _mediumThreshold,
-                    min: 1.0,
-                    max: 3.0,
-                    divisions: 20,
-                    color: AppColors.medium,
-                    onChanged: (v) => setState(() => _mediumThreshold = v),
-                  ),
-                  _buildSlider(
-                    label: _language == 'TR' ? 'UZAK' : 'FAR',
-                    value: _farThreshold,
-                    min: 2.0,
-                    max: 5.0,
-                    divisions: 30,
-                    color: AppColors.far,
-                    onChanged: (v) => setState(() => _farThreshold = v),
-                  ),
-                ],
+          const SizedBox(height: Space.m),
+          FilledButton(
+            onPressed: _probe == _Probe.checking ? null : _saveAndCheck,
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(64)),
+            child: const Text('Kaydet ve dene', style: TextStyle(fontSize: TypeScale.body)),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: Space.s),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                message,
+                style: text.bodySmall?.copyWith(color: color, fontWeight: FontWeight.w600),
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-
-          // Sound & Vibration & TTS Settings
-          _buildSectionTitle(_language == 'TR' ? '🔊 Ses, Titreşim ve Konuşma' : '🔊 Sound, Vibration & Speech'),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: Text(_language == 'TR' ? 'Sesli Uyarı' : 'Sound Alert'),
-                  subtitle: Text(_language == 'TR' ? 'Tehlike durumunda ses çal' : 'Play sound on danger'),
-                  value: _soundEnabled,
-                  onChanged: (v) => setState(() => _soundEnabled = v),
-                ),
-                if (_soundEnabled)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildSlider(
-                      label: _language == 'TR' ? 'Ses Seviyesi' : 'Sound Volume',
-                      value: _soundVolume,
-                      min: 0.0,
-                      max: 1.0,
-                      divisions: 10,
-                      color: Colors.blue,
-                      onChanged: (v) => setState(() => _soundVolume = v),
-                    ),
-                  ),
-                const Divider(),
-                SwitchListTile(
-                  title: Text(_language == 'TR' ? 'Titreşim' : 'Vibration'),
-                  subtitle: Text(_language == 'TR' ? 'Tehlike durumunda titreşim' : 'Vibrate on danger'),
-                  value: _vibrationEnabled,
-                  onChanged: (v) => setState(() => _vibrationEnabled = v),
-                ),
-                if (_vibrationEnabled)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildSlider(
-                      label: _language == 'TR' ? 'Titreşim Yoğunluğu' : 'Vibration Intensity',
-                      value: _vibrationIntensity,
-                      min: 0.3,
-                      max: 1.0,
-                      divisions: 7,
-                      color: Colors.purple,
-                      onChanged: (v) => setState(() => _vibrationIntensity = v),
-                    ),
-                  ),
-                const Divider(),
-                SwitchListTile(
-                  title: Text(_language == 'TR' ? '🗣️ Sesli Yönlendirme (TTS)' : '🗣️ Voice Guidance (TTS)'),
-                  subtitle: Text(_language == 'TR' 
-                    ? 'Mesafe bilgilerini sesli anlat' 
-                    : 'Announce distance information verbally'),
-                  value: _ttsEnabled,
-                  onChanged: (v) => setState(() => _ttsEnabled = v),
-                ),
-                if (_ttsEnabled)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildSlider(
-                      label: _language == 'TR' ? 'Konuşma Hızı' : 'Speech Rate',
-                      value: _speechRate,
-                      min: 0.3,
-                      max: 1.0,
-                      divisions: 14,
-                      color: Colors.green,
-                      onChanged: (v) => setState(() => _speechRate = v),
-                    ),
-                  ),
-                if (_ttsEnabled)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      _language == 'TR'
-                        ? '💡 Örnek: "TEHLİKE! Çok yakın engel! 0.8 metre mesafede. Durun!"'
-                        : '💡 Example: "DANGER! Very close obstacle! 0.8 meters away. Stop!"',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Theme Settings
-          _buildSectionTitle(_language == 'TR' ? '🎨 Görünüm' : '🎨 Appearance'),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: Text(_language == 'TR' ? 'Karanlık Mod' : 'Dark Mode'),
-                  subtitle: Text(_language == 'TR' ? 'Koyu tema kullan' : 'Use dark theme'),
-                  value: _isDarkMode,
-                  onChanged: (v) => setState(() => _isDarkMode = v),
-                ),
-                const Divider(),
-                SwitchListTile(
-                  title: Text(_language == 'TR' ? 'Yüksek Kontrast' : 'High Contrast'),
-                  subtitle: Text(_language == 'TR' ? 'Daha belirgin renkler' : 'More distinct colors'),
-                  value: _isHighContrast,
-                  onChanged: (v) => setState(() => _isHighContrast = v),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Camera Settings
-          _buildSectionTitle(_language == 'TR' ? '📷 Kamera' : '📷 Camera'),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  title: Text(_language == 'TR' ? 'Frame Rate (Kare Hızı)' : 'Frame Rate'),
-                  subtitle: Text(_language == 'TR' 
-                    ? 'Saniyede $_frameRate analiz' 
-                    : '$_frameRate analyses per second'),
-                  trailing: DropdownButton<int>(
-                    value: _frameRate,
-                    items: [1, 2, 3, 5, 10].map((rate) {
-                      return DropdownMenuItem(
-                        value: rate,
-                        child: Text('$rate FPS'),
-                      );
-                    }).toList(),
-                    onChanged: (value) => setState(() => _frameRate = value!),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    _language == 'TR'
-                      ? '⚠️ Yüksek FPS daha fazla batarya ve işlemci kullanır'
-                      : '⚠️ Higher FPS uses more battery and CPU',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // API Settings
-          _buildSectionTitle(_language == 'TR' ? '🌐 Sunucu Bağlantısı' : '🌐 Server Connection'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                controller: _apiUrlController,
-                decoration: InputDecoration(
-                  labelText: 'API URL',
-                  hintText: 'http://192.168.1.100:8000',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.link),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 32),
-
-          // Save Button
-          ElevatedButton.icon(
-            onPressed: _saveSettings,
-            icon: const Icon(Icons.save),
-            label: Text(_language == 'TR' ? 'Kaydet' : 'Save'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.all(16),
-              backgroundColor: Colors.green,
-            ),
-          ),
-          const SizedBox(height: 16),
+          ],
         ],
       ),
     );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSlider({
-    required String label,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required Color color,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-            Text('${value.toStringAsFixed(2)}m', 
-              style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        Slider(
-          value: value,
-          min: min,
-          max: max,
-          divisions: divisions,
-          activeColor: color,
-          onChanged: onChanged,
-        ),
-      ],
-    );
-  }
-
-  @override
-  void dispose() {
-    _apiUrlController.dispose();
-    super.dispose();
   }
 }

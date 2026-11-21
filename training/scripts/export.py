@@ -1,31 +1,39 @@
 """
-Gören Göz - Model Export Script
+Gören Göz - model dışa aktarma.
+
+- Mobil: LiteRT (INT8) `.tflite`, `assets/models/` altına girer.
+- Sunucu: OpenVINO IR (`.xml` + `.bin`), `MODELS_DIR` altına girer.
+
+Argüman adlarını Ultralytics export belgesiyle doğrula:
+https://docs.ultralytics.com/modes/export/
 """
 
 import argparse
-import shutil
-from pathlib import Path
+
 from ultralytics import YOLO
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, required=True)
-    parser.add_argument('--output', type=str, default='../../backend/models')
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Gören Göz model dışa aktarma")
+    parser.add_argument("--model", required=True, help="Eğitilmiş ağırlık (best.pt)")
+    parser.add_argument("--data", default="configs/dataset.yaml", help="INT8 kalibrasyon verisi")
+    parser.add_argument("--imgsz", type=int, default=416)
+    parser.add_argument(
+        "--target",
+        choices=("mobile", "server", "both"),
+        default="both",
+        help="mobile = litert int8, server = openvino",
+    )
     args = parser.parse_args()
-    
+
     model = YOLO(args.model)
-    output = Path(args.output)
-    output.mkdir(exist_ok=True)
-    
-    # PyTorch copy
-    shutil.copy(args.model, output / 'yolo11n_turkish.pt')
-    print(f"✅ Exported to {output / 'yolo11n_turkish.pt'}")
-    
-    # ONNX export
-    model.export(format='onnx', opset=17)
-    print("✅ ONNX export done")
+    if args.target in ("mobile", "both"):
+        path = model.export(format="litert", int8=True, imgsz=args.imgsz, data=args.data)
+        print(f"LiteRT: {path}")
+    if args.target in ("server", "both"):
+        path = model.export(format="openvino", imgsz=args.imgsz)
+        print(f"OpenVINO: {path}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

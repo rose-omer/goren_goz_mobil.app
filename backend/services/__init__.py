@@ -1,1 +1,1 @@
-"""Services module initialization."""
+"""Servis katmanı."""

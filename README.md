@@ -1,229 +1,107 @@
-# 👁️ Gören Göz Mobil - Yapay Zeka Destekli Derinlik Algılama Sistemi
+# Gören Göz
 
-**Gören Göz Mobil**, görme engelliler için mobil kameradan gerçek zamanlı görüntü alarak yapay zeka ile derinlik tahmini ve nesne tespiti yapan bir Flutter uygulamasıdır. MiDaS (Monocular Depth Estimation) ve YOLOv11 modelleri kullanarak engel tespiti, tehlike uyarısı ve sesli yönlendirme sunar.
+Görme engelli kişiler için sesli engel uyarısı ve Türkçe soru-cevap. Telefon kamerası önü izler; uygulama tehlikeyi sesle, titreşimle ve kısa Türkçe cümleyle bildirir.
 
-## ✨ Özellikler
+> Gören Göz yardımcı bir araçtır. Baston ya da rehber köpeğin yerini tutmaz.
 
-- 🎥 **Gerçek Zamanlı Görüntü İşleme**: Laptop kamerasından canlı video akışı
-- 🧠 **Yapay Zeka Derinlik Tahmini**: MiDaS modeli ile monoküler derinlik tahmini
-- 🎨 **Renkli Görselleştirme**: Depth haritalarını renkli görüntülere dönüştürme
-- ⚠️ **Akıllı Uyarı Sistemi**: Belirli mesafelerde otomatik uyarı
-- 📊 **Performans İzleme**: FPS gösterimi ve sistem metrikleri
-- ⚙️ **Yapılandırılabilir**: YAML tabanlı kolay konfigürasyon
-- 🔍 **Detaylı Loglama**: Tüm işlemlerin kaydı
+## Durum
 
-## 🚀 Kurulum
+| Parça | Durum |
+|---|---|
+| Mobil uygulama (Flutter 3.50.1) | Yeni arayüz: dört bantlı yürüyüş ekranı, TalkBack, haptik desen, Türkçe ses. `flutter analyze` 0 bulgu, 68 test. |
+| Uyarı motoru | TTC + nesne boyu mesafesi + histerezis + konuşma kuyruğu. Mobil ve backend aynı kural. |
+| Algılama | Şimdilik sunucuda (MiDaS + YOLO). Cihaz üstü LiteRT modeli eğitim bekliyor (`docs/MODELS.md`). |
+| Backend (FastAPI 0.165) | API anahtarı, tek hız sınırı, oturum başına takip, debug uçları kapalı. 66 test, model indirmeden. |
+| VLM | llama-server `/v1/chat/completions` + `image_url`, Türkçe istem. Model `VLM_MODEL` ile seçilir. |
+| Ölçüm | Uçtan uca gecikme ve doğruluk tabloları henüz ölçülmedi. |
 
-### Gereksinimler
+## Mimari
 
-- Python 3.10 veya üzeri
-- Webcam/Laptop kamerası
-- (Opsiyonel) NVIDIA GPU (CUDA destekli)
-
-### Adım 1: Projeyi İndir
-
-```bash
-git clone https://github.com/kullanici/goren_goz_laptop.git
-cd goren_goz_laptop
+```
+Telefon                                        Sunucu (isteğe bağlı)
+┌──────────────────────────────┐   kare    ┌──────────────────────────┐
+│ Kamera akışı (YUV, 640 px)   │──────────▶│ /api/analyze             │
+│ Uyarı motoru + histerezis    │◀──────────│ MiDaS göreli derinlik    │
+│ Konuşma kuyruğu, haptik, ses │  nesneler │ YOLO + oturum takibi/TTC │
+│ Soru sor (tr_TR)             │──────────▶│ /api/ask_context → VLM   │
+└──────────────────────────────┘           └──────────────────────────┘
 ```
 
-### Adım 2: Virtual Environment Oluştur
+Ayrıntı: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-**Windows:**
+## Hızlı başlangıç
+
+### Backend
+
+Bu makinede 8000, 1984, 8554, 8555 portları yasak. Varsayılan port 8110.
+
 ```powershell
-python -m venv venv
-.\venv\Scripts\activate
+cd backend
+py -3.11 -m venv .venv; .venv\Scripts\activate
+pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-dev.txt
+copy .env.example .env        # API_KEY değerini doldur
+python scripts/download_models.py --target backend   # önce scripts/models.json'u doldur
+Get-NetTCPConnection -LocalPort 8110 -State Listen    # boş olmalı
+uvicorn main:app --host 0.0.0.0 --port 8110
 ```
 
-**Linux/Mac:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
+- Telefondan bağlanmak için `--host 0.0.0.0` ve `API_KEY` zorunlu.
+- `DEBUG=true` iken `/docs` ve `/monitor` yalnız bu makineden açılır.
+- Docker: `docker build -t goren-goz-backend backend` → `docker run -p 8110:8110 --env-file backend/.env goren-goz-backend`.
+
+### VLM (isteğe bağlı)
+
+```powershell
+llama-server -m <model>.gguf --mmproj <mmproj>.gguf --port 8120 --api-key $env:VLM_API_KEY
 ```
 
-### Adım 3: Gereksinimleri Yükle
+Backend `.env`: `VLM_SERVER_URL=http://127.0.0.1:8120`, `VLM_API_KEY`, `VLM_MODEL`. Varsayılan model `SmolVLM2-500M-Video-Instruct`; Türkçe ölçümden sonra değiştir.
 
-```bash
-pip install -r requirements.txt
+### Mobil
+
+```powershell
+cd mobile_app
+C:\src\flutter\bin\flutter.bat pub get
+C:\src\flutter\bin\flutter.bat test
+C:\src\flutter\bin\flutter.bat run      # Android cihaz
 ```
 
-> ⚠️ **Not**: İlk çalıştırmada MiDaS modeli (~400MB) otomatik indirilecektir.
+İlk açılış: kamera izni → Ayarlar bandı → sunucu adresi ve API anahtarı → "Kaydet ve dene". Debug sürümü yerel ağ HTTP'sini (`http://192.168.x.x:8110`) kabul eder; release sürümü yalnız `https://` kabul eder.
 
-## 🎮 Kullanım
+## Ekranlar
 
-### Basit Başlatma
+- **Açılış:** sesli karşılama, ekranın alt yarısında tek "Kamera iznini ver" düğmesi, bir kerelik güvenlik uyarısı ve kullanım turu.
+- **Yürüyüş:** dört tam genişlik bant: Durumu söyle, Soru sor, Duraklat, Ayarlar. Üstte seviye şeridi (Dur, Dikkat).
+- **Ayarlar:** konuşma hızı, ses, titreşim, yön anlatımı (sol/orta/sağ ya da saat yönü), ayrıntı düzeyi, sunucu, tema.
+- **Yardımcı görünümü:** gören yardımcı ve jüri için kamera, kutular, FPS, gecikme.
 
-```bash
-python src/main.py
-```
+Ayrıntı: [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md).
 
-### Kamera Testi
+## Ölçüm tabloları
 
-Kameranızın düzgün çalıştığını test etmek için:
+Henüz ölçülmedi. Yöntem ve boş tablolar: [docs/TEST_PLAN.md](docs/TEST_PLAN.md).
 
-```bash
-python src/camera_handler.py
-```
+| Ölçüm | Önce | Sonra |
+|---|---|---|
+| Uyarı gecikmesi p95 (kare → ses) | ölçülmedi | ölçülmedi |
+| Nesne boyu mesafe hatası (insan, araç) | yok | ölçülmedi |
+| VLM doğru cevap oranı (30 soru) | ölçülmedi | ölçülmedi |
 
-Bu komut 100 frame yakalayıp FPS bilgisini gösterecektir.
+## Sınırlar
 
-## ⌨️ Klavye Kısayolları
+- MiDaS göreli derinlik verir; uygulama derinlikten metre söylemez. Metre yalnız nesne boyundan ve kalibrasyonla gelir.
+- COCO sınıfları merdiven, bordür, direk, çukur içermez. 12 sınıflı Türkiye modeli eğitilmedi.
+- Algılama şimdilik sunucuya bağlı. Bağlantı koparsa uygulama bunu sesle ve uzun titreşimle bildirir.
+- Android SDK olmadan APK derlenmedi; TalkBack el testi yapılmadı.
 
-| Tuş | Açıklama |
-|-----|----------|
-| `q` veya `ESC` | Programı kapat |
-| `s` | Screenshot al |
-| `c` | Colormap değiştir |
-| `+` / `-` | Uyarı mesafesini ayarla |
-| `r` | Ayarları sıfırla |
-| `p` | Duraklat/Devam ettir |
-| `f` | Tam ekran modu |
+## Belgeler
 
-## 📁 Proje Yapısı
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): bileşenler, veri akışı, güvenlik varsayılanları.
+- [docs/MODELS.md](docs/MODELS.md): eğitim, dışa aktarma, model dağıtımı, lisanslar.
+- [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md): ekranlar, tasarım tokenleri, haptik ve ses desenleri, TalkBack.
+- [docs/TEST_PLAN.md](docs/TEST_PLAN.md): otomatik testler, el testi listesi, saha testi.
+- [docs/THESIS_REPORT.md](docs/THESIS_REPORT.md): bitirme raporu.
 
-```
-goren_goz_laptop/
-├── src/
-│   ├── __init__.py              # Paket başlatıcı
-│   ├── camera_handler.py        # ✅ Kamera işleme modülü
-│   ├── depth_estimator.py       # Derinlik tahmini (MiDaS)
-│   ├── visualizer.py            # Görselleştirme
-│   ├── alert_system.py          # Uyarı sistemi
-│   ├── config.py                # ✅ Konfigürasyon yönetimi
-│   └── main.py                  # Ana program
-├── tests/                       # Test dosyaları
-├── config/
-│   └── config.yaml              # ✅ Sistem ayarları
-├── logs/                        # Log dosyaları
-├── data/
-│   ├── models/                  # MiDaS model dosyaları
-│   └── sample_outputs/          # Test çıktıları
-├── requirements.txt             # ✅ Python paketleri
-├── .gitignore                   # ✅ Git ignore kuralları
-└── README.md                    # ✅ Bu dosya
-```
+## Lisans
 
-**Tamamlanan Modüller**: ✅  
-**Devam Eden Modüller**: 🔄  
-**Planlanan Modüller**: ⏳
-
-## ⚙️ Konfigürasyon
-
-`config/config.yaml` dosyasından tüm ayarları değiştirebilirsiniz:
-
-```yaml
-camera:
-  device_id: 0          # Kamera ID
-  width: 640            # Çözünürlük genişliği
-  height: 480           # Çözünürlük yüksekliği
-  fps: 30               # Hedef FPS
-
-depth_model:
-  model_type: "DPT_Large"   # Model tipi
-  device: "auto"            # cuda, cpu veya auto
-
-alerts:
-  min_distance: 1.0         # Minimum güvenli mesafe (metre)
-  warning_distance: 2.0     # Uyarı mesafesi
-```
-
-## 🧪 Test
-
-Kamera modülünü test etmek için:
-
-```bash
-python src/camera_handler.py
-```
-
-Config modülünü test etmek için:
-
-```bash
-python src/config.py
-```
-
-Tüm testleri çalıştırmak için (test suite hazır olduğunda):
-
-```bash
-pytest tests/
-```
-
-## 📊 Performans
-
-**Hedef Metrikler:**
-- FPS: 20+ (laptop kamerasında)
-- Latency: <100ms
-- CPU Kullanımı: <80%
-- RAM Kullanımı: <2GB
-
-**Gerçek Performans** (örnek sistem: Intel i7, 16GB RAM):
-- FPS: ~25 (CPU modunda)
-- FPS: ~45 (GPU modunda)
-- Latency: 60-80ms
-
-## 🐛 Sorun Giderme
-
-### Kamera Açılmıyor
-
-```bash
-# Windows için Device Manager'da kontrol edin
-# Linux için:
-ls /dev/video*
-```
-
-### Model İndirme Başarısız
-
-İnternet bağlantınızı kontrol edin. Model yaklaşık 400MB boyutundadır.
-
-### Düşük FPS
-
-1. Konfigürasyonda çözünürlüğü düşürün (örn: 320x240)
-2. GPU kullanımını aktif edin (`device: "cuda"`)
-3. `model_type: "MiDaS_small"` ile daha hafif model kullanın
-
-## 📝 Geliştirme Durumu
-
-**Tamamlanan (20 Kasım 2025):**
-- ✅ Proje yapısı oluşturuldu
-- ✅ `requirements.txt` güncellendi
-- ✅ `config.yaml` hazırlandı
-- ✅ `camera_handler.py` tamamlandı (FPS hesaplama, thread-safe)
-- ✅ `config.py` tamamlandı (YAML yönetimi)
-- ✅ `.gitignore` eklendi
-- ✅ README hazırlandı
-
-**Devam Eden:**
-- 🔄 `depth_estimator.py` (MiDaS entegrasyonu)
-- 🔄 `visualizer.py` (Colormap görselleştirme)
-
-**Planlanan:**
-- ⏳ `alert_system.py` (Uyarı sistemi)
-- ⏳ `main.py` (Ana program)
-- ⏳ Test suite
-
-## 🤝 Katkıda Bulunma
-
-1. Fork yapın
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Commit yapın (`git commit -m 'feat: Add amazing feature'`)
-4. Push edin (`git push origin feature/amazing-feature`)
-5. Pull Request açın
-
-## 📄 Lisans
-
-Bu proje MIT lisansı altındadır.
-
-## 👨‍💻 Geliştirici
-
-**Proje Adı**: Gören Göz Laptop  
-**Tarih**: Kasım 2025  
-**Versiyon**: 0.1.0 (Alpha)
-
-## 🙏 Teşekkürler
-
-- [MiDaS](https://github.com/isl-org/MiDaS) - Intel ISL tarafından geliştirilen derinlik tahmini modeli
-- [OpenCV](https://opencv.org/) - Görüntü işleme kütüphanesi
-- [PyTorch](https://pytorch.org/) - Derin öğrenme framework'ü
-
----
-
-**Not**: Bu proje aktif geliştirme aşamasındadır. Eksiklikler ve hatalar olabilir. Geri bildirimlerinizi bekliyoruz! 🚀
+Karar bekliyor. Ultralytics AGPL-3.0 olduğu için öneri AGPL-3.0 (bkz. `docs/MODELS.md`).

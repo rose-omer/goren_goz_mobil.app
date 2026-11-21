@@ -1,0 +1,25 @@
+# Gören Göz backend varsayılanları. Ortam değişkeni ve .env bu dosyayı ezer.
+# Alan adları core/config.py içindeki Settings alanlarıyla aynıdır.
+
+depth_backend: openvino_midas
+openvino_device: AUTO
+midas_model_name: MiDaS_small
+detection_confidence: 0.5
+max_objects: 10
+
+# Uyarı motoru (mobil lib/core/hazard_engine.dart ile aynı değerler)
+danger_ttc_s: 2.0
+near_ttc_s: 4.0
+danger_distance_m: 1.0
+near_distance_m: 2.0
+proximity_danger: 0.85
+proximity_near: 0.6
+proximity_area_threshold: 0.10
+raise_after_frames: 2
+lower_after_frames: 5
+session_ttl_s: 60
+max_sessions: 256
+
+vlm_timeout_s: 30
+vlm_max_tokens: 48
+vlm_temperature: 0.2

@@ -38,3 +38,7 @@ htmlcov/
 # Temporary files
 *.tmp
 temp/
+
+# Model dosyaları repoya girmez (scripts/download_models.py)
+model_files/
+.ruff_cache/

@@ -1,1 +1,1 @@
-"""Models module initialization."""
+"""API şemaları."""

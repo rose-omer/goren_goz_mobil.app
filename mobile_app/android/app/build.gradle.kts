@@ -14,7 +14,8 @@ val keyProperties = Properties().apply {
 
 android {
     namespace = "com.rose_omer.gorengoz"
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler_android API 37 ister; Flutter varsayılanı 36.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

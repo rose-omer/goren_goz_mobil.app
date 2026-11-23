@@ -84,6 +84,12 @@ EncodedFrame encodeYuvFrame(YuvFrame frame, {int maxSide = 640, int quality = 75
   return EncodedFrame(img.encodeJpg(rotated, quality: quality), rotated.width, rotated.height);
 }
 
+/// [encodeYuvFrame]'i yan isolate'te çalıştırır. Closure burada kurulur; yalnız kareyi ve
+/// ayarları yakalar. Çağıranın içinde kurulursa `onFrame` ve `this` de isolate mesajına girer
+/// ("object is unsendable") ve hiçbir kare kodlanmaz.
+Future<EncodedFrame> encodeYuvFrameInIsolate(YuvFrame frame, {int maxSide = 640, int quality = 75}) =>
+    Isolate.run(() => encodeYuvFrame(frame, maxSide: maxSide, quality: quality));
+
 abstract interface class FrameSource {
   /// Kamera hazır mı.
   bool get isReady;
@@ -137,7 +143,7 @@ class CameraFrameSource implements FrameSource {
       // Son çıkarım bitmeden yeni kare alma (plan E11).
       if (_busy) return;
       _busy = true;
-      unawaited(Isolate.run(() => encodeYuvFrame(raw)).then(onFrame).whenComplete(() => _busy = false));
+      unawaited(encodeYuvFrameInIsolate(raw).then(onFrame).whenComplete(() => _busy = false));
     });
   }
 
@@ -153,7 +159,7 @@ class CameraFrameSource implements FrameSource {
   Future<EncodedFrame?> latest() async {
     final raw = _lastRaw;
     if (raw == null) return null;
-    return Isolate.run(() => encodeYuvFrame(raw, maxSide: 768, quality: 85));
+    return encodeYuvFrameInIsolate(raw, maxSide: 768, quality: 85);
   }
 
   /// Uygulama arka plana geçince kamerayı bırakır (plan M8).

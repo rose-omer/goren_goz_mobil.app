@@ -68,6 +68,26 @@ C:\src\flutter\bin\flutter.bat run      # Android cihaz
 
 İlk açılış: kamera izni → Ayarlar bandı → sunucu adresi ve API anahtarı → "Kaydet ve dene". Debug sürümü yerel ağ HTTP'sini (`http://192.168.x.x:8110`) kabul eder; release sürümü yalnız `https://` kabul eder.
 
+## Kullanım örneği
+
+Senaryo: kullanıcı evde odadan odaya yürüyor. Telefon göğüs hizasında, kamera önde.
+
+<p align="center">
+  <img src="docs/media/yuruyus_demo.gif" width="270" alt="Yürüyüş ekranı: durum şeridi önce 'Yol açık', sonra 'Dikkat. Önde engel.' ve sarı 'Dikkat' uyarısı gösteriyor">
+</p>
+
+1. Yol boşken şerit "Yol açık." gösterir.
+2. Önde yakın bir yüzey belirince şerit "Dikkat. Önde engel." der.
+3. Engel birkaç kare sürerse seviye "Dikkat"e çıkar: şerit sarı olur, telefon iki kısa titrer, uyarı sesi çalar. Engel çok yakınsa seviye "Dur" olur ve telefon üç kez titrer.
+4. Nesne tanınırsa yön de söylenir: "Dikkat. İnsan, solda."
+5. Kullanıcı "Durumu söyle" bandına dokunur; uygulama son sahneyi okur.
+
+GIF Android emülatöründe çekildi: emülatörün örnek oda videosu arka kamera yerine geçti, algılama yerel backend'de koştu. Yardımcı görünümü açık; kutular, FPS ve gecikme gören yardımcı içindir.
+
+| Açılış | Yürüyüş ekranı | Yardımcı görünümü | Ayarlar: sunucu |
+|---|---|---|---|
+| <img src="docs/media/acilis.png" width="180" alt="Açılış: güvenlik uyarısı ve Kamera iznini ver düğmesi"> | <img src="docs/media/yuruyus_ekrani.png" width="180" alt="Dört bant: Durumu söyle, Soru sor, Duraklat, Ayarlar"> | <img src="docs/media/yardimci_gorunumu.png" width="180" alt="Kamera görüntüsü, FPS ve gecikme, Yol açık şeridi"> | <img src="docs/media/ayarlar_sunucu.png" width="180" alt="Sunucu adresi, API anahtarı, Kaydet ve dene"> |
+
 ## Ekranlar
 
 - **Açılış:** sesli karşılama, ekranın alt yarısında tek "Kamera iznini ver" düğmesi, bir kerelik güvenlik uyarısı ve kullanım turu.
@@ -92,7 +112,7 @@ Henüz ölçülmedi. Yöntem ve boş tablolar: [docs/TEST_PLAN.md](docs/TEST_PLA
 - MiDaS göreli derinlik verir; uygulama derinlikten metre söylemez. Metre yalnız nesne boyundan ve kalibrasyonla gelir.
 - COCO sınıfları merdiven, bordür, direk, çukur içermez. 12 sınıflı Türkiye modeli eğitilmedi.
 - Algılama şimdilik sunucuya bağlı. Bağlantı koparsa uygulama bunu sesle ve uzun titreşimle bildirir.
-- Android SDK olmadan APK derlenmedi; TalkBack el testi yapılmadı.
+- Debug APK telefonda (Android 13) ve emülatörde (Android 16) çalıştı. TalkBack el testi yapılmadı.
 
 ## Belgeler
 
